@@ -1,7 +1,6 @@
 const { Router } = require("express");
 const router = Router();
-const { GetAll,GetId, Create, Update, Delete} = require("../controllers/eventsController.js");
-const {validateToken} = require("../middlewares/validateToken.js");
+const { GetAll,GetId, Create, Update, Delete} = require("../controllers/roundsController.js");
 
 router.get("/",validateToken,GetAll)
 router.get("/:id",validateToken,GetId)
