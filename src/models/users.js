@@ -35,15 +35,19 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.BOOLEAN
     },
-    first_name:{
+    first_name: {
       allowNull: false,
       type: DataTypes.STRING
     },
-    last_name:{
+    last_name: {
       allowNull: false,
       type: DataTypes.STRING
     },
-    initial_balance:{
+    email: {
+      allowNull: false,
+      type: DataTypes.STRING
+    },
+    initial_balance: {
       allowNull: false,
       type: DataTypes.DOUBLE
     }

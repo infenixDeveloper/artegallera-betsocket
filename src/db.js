@@ -16,9 +16,7 @@ if (config.use_env_variable) {
       logging: false,
       native: false,
       dialectOptions: {
-        ssl: {
-          require: 'true'
-        }
+        ssl: false
       }
     }
   );

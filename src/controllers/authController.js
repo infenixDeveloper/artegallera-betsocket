@@ -1,80 +1,83 @@
 const jwt = require("jsonwebtoken");
-const {users} = require("../db");
-const {Op} = require("sequelize");
+const { users } = require("../db");
+const { Op } = require("sequelize");
 const bcrypt = require("bcrypt");
 
-async function login(req,res) {
-    let result={};
-    let {username,password} = req.body;
+async function login(req, res) {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({
+            success: false,
+            message: 'Usuario o contraseña faltante'
+        });
+    }
+
     try {
-        if(username !="" && password !=""){
-            let dtaUser= await users.findOne({
-                where: {
-                    username:{
-                        [Op.eq]: username
-                    }
-                }
-            });
-            if(dtaUser){
-                const isMatch = await bcrypt.compare(password, dtaUser.password);
-                if(isMatch){
-                    let token = jwt.sign({id: dtaUser.id}, process.env.SECRET_KEY, {
-                        expiresIn: 86400 // 24 hours
-                    });
-                    result = {
-                        success: true,
-                        message: 'Registro exitoso',
-                        data: {
-                            token: token,
-                            user: dtaUser
-                        }
-                    };
-                }else{
-                    result = {
-                        success: false,
-                        message: 'Usuario o contraseña incorrecto'
-                    };
-                }
-            }
-        }else{
-            result = {
+        const dtaUser = await users.findOne({ where: { username } });
+
+        if (!dtaUser) {
+            return res.status(401).json({
                 success: false,
                 message: 'Usuario o contraseña incorrecto'
-            };
+            });
         }
+
+        const isMatch = await bcrypt.compare(password, dtaUser.password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuario o contraseña incorrecto'
+            });
+        }
+
+        const token = jwt.sign({ id: dtaUser.id }, process.env.SECRET_KEY, {
+            expiresIn: 86400
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Inicio de sesión exitoso',
+            data: {
+                token,
+                user: dtaUser
+            }
+        });
+
     } catch (error) {
-        result = {
+        return res.status(500).json({
             success: false,
-            message: 'Error al ejecutar la funcion',
+            message: 'Error al ejecutar la función',
             error: error.message
-        };
+        });
     }
-    return res.json(result);
 }
 
-async function register(req,res) {
-    let result={};
+
+async function register(req, res) {
+    let result = {};
     let {
-        username,password,
-        is_active,first_name,
-        last_name,initial_balance
+        username, password,
+        is_active, first_name,
+        last_name, initial_balance, email
     } = req.body;
     try {
-        if(username!="" && password!="" && is_active === true && first_name!="" && last_name!="" && initial_balance >= 0){
+        if (username != "" && password != "" && is_active === true && first_name != "" && last_name != "" && initial_balance >= 0 && email != "") {
             let user = await users.create({
                 username,
                 password: bcrypt.hashSync(password, 10),
                 is_active,
                 first_name,
                 last_name,
-                initial_balance
+                initial_balance,
+                email
             });
             result = {
                 success: true,
                 message: 'Registro exitoso',
                 data: user
             };
-        }else{
+        } else {
             result = {
                 success: false,
                 message: 'Todos los campos son obligatorios'
@@ -90,27 +93,27 @@ async function register(req,res) {
     return res.json(result);
 }
 
-async function forgotPassword(req,res) {
-    let result={};
+async function forgotPassword(req, res) {
+    let result = {};
     try {
-       let {username,password} = req.body;
-       let user = await users.findOne({where:{username}});
-       if(user){
-           user.password = bcrypt.hashSync(password, 10);
-           await user.save();
-           result = {
-               success: true,
-               message: 'Contraseña actualizada correctamente'
-           };
+        let { username, password } = req.body;
+        let user = await users.findOne({ where: { username } });
+        if (user) {
+            user.password = bcrypt.hashSync(password, 10);
+            await user.save();
+            result = {
+                success: true,
+                message: 'Contraseña actualizada correctamente'
+            };
 
-       }else{
+        } else {
             result = {
                 success: false,
                 message: 'Usuario no encontrado'
             };
-       }
+        }
     } catch (error) {
-         result = {
+        result = {
             success: false,
             message: 'Error al ejecutar la funcion',
             error: error.message
@@ -119,7 +122,7 @@ async function forgotPassword(req,res) {
     return res.json(result);
 }
 
-module.exports={
+module.exports = {
     login,
     register,
     forgotPassword
