@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const router = Router();
 const { GetAll,GetId, Create, Update, Delete} = require("../controllers/resultsController.js");
+const {validateToken} = require("../middlewares/validateToken.js");
 
 router.get("/",validateToken,GetAll)
 router.get("/:id",validateToken,GetId)
