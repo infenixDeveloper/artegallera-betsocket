@@ -1,9 +1,9 @@
 const jwt = require("jsonwebtoken");
-const {events} = require("../db");
-const {Op} = require("sequelize");
+const { events } = require("../db");
+const { Op } = require("sequelize");
 
-async function GetAll(req,res) {
-    let result={};
+async function GetAll(req, res) {
+    let result = {};
     try {
         let dtaevents = await events.findAll();
         result = {
@@ -21,18 +21,18 @@ async function GetAll(req,res) {
     return res.json(result);
 }
 
-async function GetId(req,res){
-    let result={};
+async function GetId(req, res) {
+    let result = {};
     try {
-        let {id} = req.params;
+        let { id } = req.params;
         let dtaevent = await events.findByPk(id);
-        if(dtaevent){
+        if (dtaevent) {
             result = {
                 success: true,
                 message: 'Evento encontrado',
                 data: dtaevent
             };
-        }else{
+        } else {
             result = {
                 success: false,
                 message: 'Evento no encontrado'
@@ -47,12 +47,12 @@ async function GetId(req,res){
     }
     return res.json(result);
 }
-async function Create(req,res){
-    let result={};
+async function Create(req, res) {
+    let result = {};
     try {
-        let {name, date, location} = req.body;
-        let dtaevent = await events.create({name, date, location});
-        if(dtaevent){
+        let { name, date, time, location } = req.body;
+        let dtaevent = await events.create({ name, date, time, location });
+        if (dtaevent) {
             result = {
                 success: false,
                 message: 'Error al crear el evento'
@@ -67,13 +67,13 @@ async function Create(req,res){
     }
     return res.json(result);
 }
-async function Update(req,res){
-    let result={};
+async function Update(req, res) {
+    let result = {};
     try {
-        let {id} = req.params;
-        let {name, date, location} = req.body;
-        let dtaevent = await events.update({name, date, location},{where:{id}});
-        if(dtaevent){
+        let { id } = req.params;
+        let { name, date, location } = req.body;
+        let dtaevent = await events.update({ name, date, location }, { where: { id } });
+        if (dtaevent) {
             result = {
                 success: false,
                 message: 'Error al actualizar el evento'
@@ -88,12 +88,12 @@ async function Update(req,res){
     }
     return res.json(result);
 }
-async function Delete(req,res){
-    let result={};
+async function Delete(req, res) {
+    let result = {};
     try {
-        let {id} = req.params;
-        let dtaevent = await events.destroy({where:{id}});
-        if(dtaevent){
+        let { id } = req.params;
+        let dtaevent = await events.destroy({ where: { id } });
+        if (dtaevent) {
             result = {
                 success: false,
                 message: 'Error al eliminar el evento'
@@ -108,7 +108,7 @@ async function Delete(req,res){
     }
     return res.json(result);
 }
-module.exports={
+module.exports = {
     GetAll,
     GetId,
     Create,

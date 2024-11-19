@@ -1,4 +1,3 @@
-const { error } = require("winston");
 const { users } = require("../db");
 
 const getUsers = async (req, res) => {
@@ -89,12 +88,13 @@ const addBalance = async (req, res) => {
 };
 
 const deleteUser = async (req, res) => {
+  let result = {}
   const { id } = req.params;
 
   try {
     const response = await users.update({ is_active: false }, { where: { id } });
 
-    res.status(200).json({ message: "Usuario Deshabilidato con éxito" });
+    res.status(200).json(result = { success: true, message: "Usuario Deshabilidato con éxito" });
 
   } catch (error) {
     console.error("Error al actualizar el usuario:", error);
