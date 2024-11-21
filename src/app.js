@@ -16,14 +16,14 @@ if (env.NODE_ENV === 'production') {
     server.set('trust proxy', 1); // trust first proxy
 }
 
-server.use(helmet());
+server.use(helmet({ crossOriginEmbedderPolicy: false }));
 
 server.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 server.use(bodyParser.json({ limit: "50mb" }));
 server.use(express.json());
 server.use(morgan(env.MODE));
 server.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Credentials", "true");
     res.header(
         "Access-Control-Allow-Headers",
@@ -32,15 +32,6 @@ server.use((req, res, next) => {
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
     next();
 });
-server.options("*", (req, res) => {
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    );
-    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-    res.sendStatus(204); // Respuesta exitosa sin contenido
-});
-
 
 server.use((req, res, next) => {
     logger.info(`Received a ${req.method} request for ${req.url}`);

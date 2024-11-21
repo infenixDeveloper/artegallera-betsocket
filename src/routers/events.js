@@ -5,7 +5,7 @@ const { validateToken } = require("../middlewares/validateToken.js");
 
 router.get("/", validateToken, GetAll)
 router.get("/:id", validateToken, GetId)
-router.post("/create", Create);
+router.post("/create", validateToken, Create);
 router.post("/update/:id", validateToken, Update);
 router.post("/delete/:id", validateToken, Delete);
 
