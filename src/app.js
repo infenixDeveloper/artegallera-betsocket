@@ -10,6 +10,9 @@ const env = process.env;
 
 const server = express();
 
+var http = require("http").Server(server);
+var io = require("socket.io")(http);
+
 server.name = "arteGallera";
 
 if (env.NODE_ENV === 'production') {
