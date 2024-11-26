@@ -13,6 +13,8 @@ const server = express();
 var http = require("http").Server(server);
 var io = require("socket.io")(http);
 
+require('./websocket.js')(io);
+
 server.name = "arteGallera";
 
 if (env.NODE_ENV === 'production') {
@@ -50,6 +52,10 @@ server.use((err, req, res, next) => {
     res.status(status).send(message);
 });
 
+
+http.listen(process.env.WSPORT || 3001, () => {
+    console.log(`Server is listening at ${process.env.WSPORT || 3001}`);
+});
 
 
 module.exports = server;
