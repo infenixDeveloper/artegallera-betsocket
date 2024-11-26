@@ -47,6 +47,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.TIME
     },
+    is_betting_active: {
+      allowNull: false,
+      type: DataTypes.BOOLEAN
+    },
     is_active: {
       allowNull: false,
       type: DataTypes.BOOLEAN

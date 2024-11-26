@@ -47,6 +47,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.STRING
     },
+    is_admin: {
+      allowNull: false,
+      type: DataTypes.BOOLEAN
+    },
     initial_balance: {
       allowNull: false,
       type: DataTypes.DOUBLE
