@@ -2,40 +2,34 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('betting', {
+    await queryInterface.createTable('messages', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      id_user: {
+      content: {
         allowNull: false,
-        type: Sequelize.INTEGER,
-        references: {
-          model: 'users',
-          key: 'id'
-        }
+        type: Sequelize.TEXT
       },
-      id_event: {
+      event_id: {
         allowNull: false,
         type: Sequelize.INTEGER,
         references: {
           model: 'events',
-          key: 'id'
+          key: 'id',
+          onDelete: 'CASCADE'
         }
       },
-      id_round: {
-        allowNull: true,
+      user_id: {
+        allowNull: false,
         type: Sequelize.INTEGER,
         references: {
-          model: 'rounds',
-          key: 'id'
+          model: 'users',
+          key: 'id',
+          onDelete: 'SET NULL'
         }
-      },
-      amount: {
-        allowNull: false,
-        type: Sequelize.DOUBLE
       },
       createdAt: {
         allowNull: false,
@@ -51,6 +45,6 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('betting');
+    await queryInterface.dropTable('messages');
   }
 };
