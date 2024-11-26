@@ -1,116 +1,63 @@
-const {betting} = require("../db");
-const {Op} = require("sequelize");
+'use strict';
+const {
+  Model
+} = require('sequelize');
 
-async function GetAll(req,res) {
-    let result={};
-    try {
-        let dtabetting = await betting.findAll();
-        result = {
-            success: true,
-            message: 'Apuesta encontrados',
-            data: dtabetting
-        };
-    } catch (error) {
-        result = {
-            success: false,
-            message: 'Error al ejecutar la funcion',
-            error: error.message
-        };
+module.exports = (sequelize, DataTypes) => {
+  class betting extends Model {
+    /**
+     * Helper method for defining associations.
+     * This method is not a part of Sequelize lifecycle.
+     * The `models/index` file will call this method automatically.
+     */
+    static associate(models) {
+      models.betting.belongsTo(models.users, {
+        foreignKey: 'id_user',
+        targetKey: 'id'
+      });
+      models.betting.belongsTo(models.events, {
+        foreignKey: 'id_event',
+        targetKey: 'id'
+      });
+      models.betting.belongsTo(models.rounds, {
+        foreignKey: 'id_round',
+        targetKey: 'id',
+        allowNull: true
+      });
     }
-    return res.json(result);
-}
+  }
 
-async function GetId(req,res){
-    let result={};
-    try {
-        let {id} = req.params;
-        let dtabetting = await betting.findByPk(id);
-        if(dtabetting){
-            result = {
-                success: true,
-                message: 'Apuesta encontrado',
-                data: dtabetting
-            };
-        }else{
-            result = {
-                success: false,
-                message: 'Apuesta no encontrado'
-            };
-        }
-    } catch (error) {
-        result = {
-            success: false,
-            message: 'Error al ejecutar la funcion',
-            error: error.message
-        };
-    }
-    return res.json(result);
-}
-async function Create(req,res){
-    let result={};
-    try {
-        let {id_user,id_betting,amount} = req.body;
-        let dtabetting = await betting.create({id_user,id_betting,amount});
-        if(dtabetting){
-            result = {
-                success: false,
-                message: 'Error al crear el Apuesta'
-            };
-        }
-    } catch (error) {
-        result = {
-            success: false,
-            message: 'Error al ejecutar la funcion',
-            error: error.message
-        };
-    }
-    return res.json(result);
-}
-async function Update(req,res){
-    let result={};
-    try {
-        let {id} = req.params;
-        let {id_user,id_betting,amount} = req.body;
-        let dtabetting = await betting.update({id_user,id_betting,amount},{where:{id}});
-        if(dtabetting){
-            result = {
-                success: false,
-                message: 'Error al actualizar el Apuesta'
-            };
-        }
-    } catch (error) {
-        result = {
-            success: false,
-            message: 'Error al ejecutar la funcion',
-            error: error.message
-        };
-    }
-    return res.json(result);
-}
-async function Delete(req,res){
-    let result={};
-    try {
-        let {id} = req.params;
-        let dtabetting = await betting.destroy({where:{id}});
-        if(dtabetting){
-            result = {
-                success: false,
-                message: 'Error al eliminar el Apuesta'
-            };
-        }
-    } catch (error) {
-        result = {
-            success: false,
-            message: 'Error al ejecutar la funcion',
-            error: error.message
-        };
-    }
-    return res.json(result);
-}
-module.exports={
-    GetAll,
-    GetId,
-    Create,
-    Update,
-    Delete
-}
+  betting.init({
+    id: {
+      allowNull: false,
+      autoIncrement: true,
+      primaryKey: true,
+      type: DataTypes.INTEGER
+    },
+    id_user: {
+      allowNull: false,
+      type: DataTypes.INTEGER
+    },
+    id_event: {
+      allowNull: false,
+      type: DataTypes.INTEGER
+    },
+    id_round: { // Nueva columna para almacenar el ID de la ronda
+      allowNull: true, // Permitir que sea nulo si no está asociado a una ronda
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'rounds', // Nombre de la tabla a la que se refiere
+        key: 'id'
+      }
+    },
+    amount: {
+      allowNull: false,
+      type: DataTypes.DOUBLE
+    },
+  }, {
+    sequelize,
+    modelName: 'betting',
+  });
+
+  return betting;
+};
