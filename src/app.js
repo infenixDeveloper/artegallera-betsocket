@@ -12,6 +12,14 @@ const server = express();
 
 var http = require("http").Server(server);
 var io = require("socket.io")(http);
+var io = require("socket.io")(http, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+        credentials: true
+    }
+});
 
 require('./websocket.js')(io);
 

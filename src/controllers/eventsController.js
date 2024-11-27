@@ -50,8 +50,8 @@ async function GetId(req, res) {
 async function Create(req, res) {
     let result = {};
     try {
-        let { name, date, time, location, is_active } = req.body;
-        let dtaevent = await events.create({ name, date, time, location, is_active });
+        let { name, date, time, location, is_active, is_betting_active } = req.body;
+        let dtaevent = await events.create({ name, date, time, location, is_active, is_betting_active });
         if (dtaevent) {
             result = {
                 success: true,

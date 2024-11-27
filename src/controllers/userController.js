@@ -20,6 +20,34 @@ const getUsers = async (req, res) => {
   }
 }
 
+const getUserById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await users.findOne({ where: { id } });
+
+    if (user) {
+      return res.status(200).json({
+        success: true,
+        message: "Operación realizada con éxito",
+        data: user,
+      });
+    } else {
+      return res.status(404).json({
+        success: false,
+        message: "Usuario no encontrado",
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    });
+  }
+};
+
+
 const updateUser = async (req, res) => {
   const user = req.body;
   let result = {};
@@ -104,4 +132,4 @@ const deleteUser = async (req, res) => {
 
 
 
-module.exports = { getUsers, updateUser, addBalance, deleteUser }
+module.exports = { getUsers, updateUser, addBalance, deleteUser, getUserById }
