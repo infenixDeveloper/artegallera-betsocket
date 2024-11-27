@@ -59,7 +59,7 @@ async function register(req, res) {
     let {
         username, password,
         is_active, first_name,
-        last_name, initial_balance, email
+        last_name, initial_balance, email, is_admin
     } = req.body;
     try {
         if (username != "" && password != "" && is_active === true && first_name != "" && last_name != "" && initial_balance >= 0 && email != "") {
@@ -70,6 +70,7 @@ async function register(req, res) {
                 first_name,
                 last_name,
                 initial_balance,
+                is_admin,
                 email
             });
             result = {
