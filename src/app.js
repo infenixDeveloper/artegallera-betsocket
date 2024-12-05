@@ -9,9 +9,9 @@ const { specs, swaggerUi } = require('./swagger.js');
 const env = process.env;
 
 const server = express();
+const server2 = express();
 
 var http = require("http").Server(server);
-var io = require("socket.io")(http);
 var io = require("socket.io")(http, {
     cors: {
         origin: "*",
@@ -21,7 +21,16 @@ var io = require("socket.io")(http, {
     }
 });
 
+const http2 = require("http").createServer(server2);
+const io2 = require("socket.io")(http2, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+    },
+});
+
 require('./websocket.js')(io);
+require('./betsocket.js')(io2);
 
 server.name = "arteGallera";
 
@@ -63,6 +72,10 @@ server.use((err, req, res, next) => {
 
 http.listen(process.env.WSPORT || 3001, () => {
     console.log(`Server is listening at ${process.env.WSPORT || 3001}`);
+});
+
+http2.listen(process.env.BETPORT || 3003, () => {
+    console.log(`Server is listening at ${process.env.BETPORT || 3003}`);
 });
 
 

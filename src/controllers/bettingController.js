@@ -1,120 +1,172 @@
-const jwt = require("jsonwebtoken");
-const { betting } = require("../db");
+const { betting, users, events } = require("../db");
 const { Op } = require("sequelize");
 
 async function GetAll(req, res) {
-    let result = {};
     try {
-        let dtabetting = await betting.findAll();
-        result = {
+        const dtabetting = await betting.findAll({
+            include: [
+                { model: users, attributes: ['username'] },
+                { model: events, attributes: ['name'] }
+            ],
+        });
+        return res.json({
             success: true,
-            message: 'Apuesta encontrados',
+            message: 'Apuestas encontradas',
             data: dtabetting
-        };
+        });
     } catch (error) {
-        result = {
+        return res.status(500).json({
             success: false,
-            message: 'Error al ejecutar la funcion',
+            message: 'Error al obtener las apuestas',
             error: error.message
-        };
+        });
     }
-    return res.json(result);
 }
 
-async function GetId(req, res) {
-    let result = {};
+async function GetBetsByTeam(req, res) {
+    const { team, id_room, id_event } = req.body;
     try {
-        let { id } = req.params;
-        let dtabetting = await betting.findByPk(id);
-        if (dtabetting) {
-            result = {
-                success: true,
-                message: 'Apuesta encontrado',
-                data: dtabetting
-            };
-        } else {
-            result = {
-                success: false,
-                message: 'Apuesta no encontrado'
-            };
-        }
+        const totalAmount = await betting.sum('amount', {
+            where: { team, id_room, id_event },
+        });
+
+        const dtabetting = await betting.findAll({
+            where: { team, id_room, id_event },
+            include: [
+                { model: users, attributes: ['username'] },
+                { model: events, attributes: ['name'] }
+            ],
+        });
+
+        return res.json({
+            success: true,
+            message: 'Apuestas encontradas',
+            totalAmount,
+            data: totalAmount
+        });
     } catch (error) {
-        result = {
+        return res.status(500).json({
             success: false,
-            message: 'Error al ejecutar la funcion',
+            message: 'Error al obtener las apuestas',
             error: error.message
-        };
+        });
     }
-    return res.json(result);
+}
+
+
+async function GetId(req, res) {
+    const { id } = req.params;
+    try {
+        const dtabetting = await betting.findByPk(id, {
+            include: [
+                { model: users, attributes: ['username'] },
+                { model: events, attributes: ['name'] }
+            ],
+        });
+        if (dtabetting) {
+            return res.json({
+                success: true,
+                message: 'Apuesta encontrada',
+                data: dtabetting
+            });
+        }
+        return res.status(404).json({
+            success: false,
+            message: 'Apuesta no encontrada'
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Error al obtener la apuesta',
+            error: error.message
+        });
+    }
 }
 
 async function Create(req, res) {
-    let result = {};
+    const { id_user, id_event, amount, team } = req.body;
     try {
-        let { id_user, id_event, amount, team, id_round } = req.body;
-        let dtabetting = await betting.create({ id_user, id_event, amount, team, id_round });
-        if (dtabetting) {
-            result = {
-                success: true,
-                message: 'Apuesta creada con éxito'
-            };
+        if (!id_user || !id_event || !amount || !team) {
+            return res.status(400).json({
+                success: false,
+                message: 'Todos los campos son obligatorios'
+            });
         }
+        const dtabetting = await betting.create({ id_user, id_event, amount, team });
+        return res.status(201).json({
+            success: true,
+            message: 'Apuesta creada con éxito',
+            data: dtabetting
+        });
     } catch (error) {
-        result = {
+        return res.status(500).json({
             success: false,
-            message: 'Error al ejecutar la funcion',
+            message: 'Error al crear la apuesta',
             error: error.message
-        };
+        });
     }
-    return res.json(result);
 }
 
 async function Update(req, res) {
-    let result = {};
+    const { id } = req.params;
+    const { amount, team } = req.body;
+
     try {
-        let { id } = req.params;
-        let { name, date, location } = req.body;
-        let dtabetting = await betting.update({ name, date, location }, { where: { id } });
-        if (dtabetting) {
-            result = {
+        if (!amount && !team) {
+            return res.status(400).json({
                 success: false,
-                message: 'Error al actualizar el Apuesta'
-            };
+                message: 'Debe proporcionar al menos un campo para actualizar'
+            });
         }
-    } catch (error) {
-        result = {
+        const updated = await betting.update({ amount, team }, { where: { id } });
+        if (updated[0] > 0) {
+            return res.json({
+                success: true,
+                message: 'Apuesta actualizada con éxito'
+            });
+        }
+        return res.status(404).json({
             success: false,
-            message: 'Error al ejecutar la funcion',
+            message: 'Apuesta no encontrada'
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Error al actualizar la apuesta',
             error: error.message
-        };
+        });
     }
-    return res.json(result);
 }
 
 async function Delete(req, res) {
-    let result = {};
+    const { id } = req.params;
+
     try {
-        let { id } = req.params;
-        let dtabetting = await betting.destroy({ where: { id } });
-        if (dtabetting) {
-            result = {
-                success: false,
-                message: 'Error al eliminar el Apuesta'
-            };
+        const deleted = await betting.destroy({ where: { id } });
+        if (deleted) {
+            return res.json({
+                success: true,
+                message: 'Apuesta eliminada con éxito'
+            });
         }
-    } catch (error) {
-        result = {
+        return res.status(404).json({
             success: false,
-            message: 'Error al ejecutar la funcion',
+            message: 'Apuesta no encontrada'
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Error al eliminar la apuesta',
             error: error.message
-        };
+        });
     }
-    return res.json(result);
 }
+
 module.exports = {
     GetAll,
     GetId,
     Create,
     Update,
-    Delete
-}
+    Delete,
+    GetBetsByTeam
+};
