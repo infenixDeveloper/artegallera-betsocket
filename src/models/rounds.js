@@ -27,11 +27,15 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       type: DataTypes.INTEGER
     },
-    Total_amount:{
+    round: {
+      allowNull: true,
+      type: DataTypes.INTEGER
+    },
+    Total_amount: {
       allowNull: false,
       type: DataTypes.DOUBLE
     },
-    id_event:{
+    id_event: {
       allowNull: false,
       type: DataTypes.INTEGER
     },

@@ -18,6 +18,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'id_event',
         targetKey: 'id'
       });
+      models.betting.belongsTo(models.winners, {
+        foreignKey: 'id_winner',
+        as: 'winner'
+      });
     }
   }
   betting.init({
@@ -35,14 +39,18 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.INTEGER
     },
-    amount: {
-      allowNull: false,
-      type: DataTypes.DOUBLE
+    id_winner: {
+      allowNull: true,
+      type: DataTypes.INTEGER
     },
     team: {
       allowNull: false,
       type: DataTypes.STRING
-    }
+    },
+    amount: {
+      allowNull: false,
+      type: DataTypes.DOUBLE
+    },
   }, {
     sequelize,
     modelName: 'betting',

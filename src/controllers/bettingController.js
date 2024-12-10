@@ -24,14 +24,14 @@ async function GetAll(req, res) {
 }
 
 async function GetBetsByTeam(req, res) {
-    const { team, id_room, id_event } = req.body;
+    const { team, id_round, id_event } = req.body;
     try {
         const totalAmount = await betting.sum('amount', {
-            where: { team, id_room, id_event },
+            where: { team, id_round, id_event },
         });
 
         const dtabetting = await betting.findAll({
-            where: { team, id_room, id_event },
+            where: { team, id_round, id_event },
             include: [
                 { model: users, attributes: ['username'] },
                 { model: events, attributes: ['name'] }

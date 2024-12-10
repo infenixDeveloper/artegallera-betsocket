@@ -54,6 +54,10 @@ module.exports = (sequelize, DataTypes) => {
     initial_balance: {
       allowNull: false,
       type: DataTypes.DOUBLE
+    },
+    image: {
+      allowNull: true,
+      type: DataTypes.TEXT,
     }
   }, {
     sequelize,
