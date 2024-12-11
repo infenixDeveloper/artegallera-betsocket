@@ -1,3 +1,4 @@
+const { where } = require("sequelize");
 const { betting, users, events, rounds, winners } = require("./db");
 
 module.exports = (io) => {
@@ -75,7 +76,7 @@ module.exports = (io) => {
         });
 
         if (event) {
-          await event.update({ is_betting_active: isOpen });
+          await rounds.update({ is_betting_active: isOpen },{where:{id_event: event.id}});
 
           io.emit("isBettingActive", { success: true, data: event, message: isOpen ? "Evento Activo" : "Evento Inactivo" });
 
