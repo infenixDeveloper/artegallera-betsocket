@@ -51,6 +51,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.BOOLEAN
     },
+    is_betting_active: {
+      allowNull: false,
+      type: DataTypes.BOOLEAN
+    },
   }, {
     sequelize,
     modelName: 'events',

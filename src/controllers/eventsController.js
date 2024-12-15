@@ -55,6 +55,7 @@ async function Create(req, res) {
         if (dtaevent) {
             result = {
                 success: true,
+                data: dtaevent,
                 message: 'Evento creado con Éxito'
             };
         }

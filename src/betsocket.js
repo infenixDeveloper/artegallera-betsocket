@@ -55,11 +55,13 @@ module.exports = (io) => {
       }
     });
 
-    socket.on("getBetStats", async ({ id_event, team }, callback) => {
+    socket.on("getBetStats", async ({ id_event, team, id_round }, callback) => {
+      console.log(id_event, team, id_round);
+
       try {
         const totalAmount = await betting.sum("amount", {
           where: {
-            id_round: id_round || null, id_event, team
+            id_round, id_event, team
           },
         });
         callback({ success: true, totalAmount: totalAmount || 0 });
@@ -69,40 +71,69 @@ module.exports = (io) => {
       }
     });
 
+    socket.on("createRound", async ({ id_event }, callback) => {
+      try {
+        const lastRound = await rounds.findOne({
+          order: [["id", "DESC"]],
+          where: { id_event },
+          limit: 1
+        })
+
+        const newRound = await rounds.create({
+          Total_amount: 0,
+          id_event,
+          round: lastRound ? lastRound.round + 1 : 1,
+          is_betting_active: false
+        })
+
+        callback({ success: true, data: newRound, message: "Ronda Creada con éxito" });
+        io.emit("newRound", { success: true, data: newRound, message: "Ronda Creada con éxito" })
+
+      } catch (error) {
+        console.error(error);
+        callback({
+          success: false,
+          message: "Error al crear la ronde",
+          error: error
+        });
+      }
+    })
+
+    socket.on("getAllRoundsByEvent", async ({ id_event }, callback) => {
+      try {
+        if (id_event) {
+          const round = await rounds.findAll({ where: { id_event } })
+
+          if (round) {
+            callback({
+              success: true,
+              data: round,
+              message: "Rondas encontradas con éxito"
+            })
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        callback({
+          success: false,
+          error,
+          message: "Error al encontrar las rondas"
+        })
+      }
+    })
+
     socket.on("toggleEvent", async ({ id_event, isOpen, id_round }, callback) => {
       try {
-        const event = await events.findOne({
-          where: { id: id_event },
-        });
+        if (id_round) {
+          const round = await rounds.findOne({
+            where: {
+              id: id_round,
+            },
+          });
 
-        if (event) {
-          await rounds.update({ is_betting_active: isOpen },{where:{id_event: event.id}});
-
-          io.emit("isBettingActive", { success: true, data: event, message: isOpen ? "Evento Activo" : "Evento Inactivo" });
-
-          const lastRound = await rounds.findOne({
-            order: [["id", "DESC"]],
-            limit: 1
-          })
-
-          if (event.is_betting_active) {
-            console.log(lastRound.id_event !== id_event);
-
-            const newRound = await rounds.create({
-              Total_amount: 0,
-              id_event,
-              round: lastRound.id_event === id_event ? lastRound.round + 1 : 1
-            })
-
-            io.emit("newRound", { success: true, data: newRound, message: "Nueva Ronda Creada" })
-          } else {
-
-            const totalAmount = await betting.sum('amount', {
-              where: { id_event, id_round }
-            });
-
-            await lastRound.update({ Total_amount: totalAmount }, { where: { id: lastRound.id } })
-
+          if (round) {
+            await round.update({ is_betting_active: isOpen });
+            io.emit("isBettingActive", { success: true, data: round, message: isOpen ? "Ronda Activo" : "Ronda Inactivo" });
           }
         } else {
           callback({ success: false, message: "Evento no encontrado" });
@@ -115,22 +146,16 @@ module.exports = (io) => {
           message: "Error al procesar el evento. Por favor, intente nuevamente.",
         });
       }
-    });
+    })
 
-    socket.on("getEventStatus", async ({ id_event }, callback) => {
-      console.log(id_event);
-
+    socket.on("getRoundStatus", async ({ id_event, id }, callback) => {
       try {
         const event = await events.findOne({
           where: { id: id_event },
         });
 
         if (event) {
-          const round = await rounds.findOne({
-            where: { id_event },
-            order: [["id", "DESC"]],
-            limit: 1,
-          });
+          const round = await rounds.findByPk(id);
 
           callback({
             success: true,
@@ -139,6 +164,7 @@ module.exports = (io) => {
               round,
             },
           });
+
         } else {
           callback({ success: false, message: "Evento no encontrado" });
         }
@@ -152,6 +178,8 @@ module.exports = (io) => {
     });
 
     socket.on("selectWinner", async ({ id_event, id_round, team }, callback) => {
+      console.log(id_event, id_round, team);
+
       try {
         // Obtener todas las apuestas para el evento y la ronda
         const getBets = async (condition) => betting.findAll({ where: condition });
