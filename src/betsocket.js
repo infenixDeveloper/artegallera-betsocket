@@ -1,4 +1,3 @@
-const { where } = require("sequelize");
 const { betting, users, events, rounds, winners } = require("./db");
 
 module.exports = (io) => {
@@ -134,6 +133,12 @@ module.exports = (io) => {
           if (round) {
             await round.update({ is_betting_active: isOpen });
             io.emit("isBettingActive", { success: true, data: round, message: isOpen ? "Ronda Activo" : "Ronda Inactivo" });
+
+            const activeRounds = await rounds.findAll({ where: { id_event, is_betting_active: true } });
+
+            if (activeRounds) {
+              io.emit("getActiveRounds", { success: true, data: activeRounds, message: "Rondas activas encontradas con éxito" })
+            }
           }
         } else {
           callback({ success: false, message: "Evento no encontrado" });
@@ -182,7 +187,7 @@ module.exports = (io) => {
 
       try {
         // Obtener todas las apuestas para el evento y la ronda
-        const getBets = async (condition) => betting.findAll({ where: condition });
+        const getBets = async (condition) => betting.findAll({ where: condition, order: [['createdAt', 'ASC']] });
 
         // Actualizar el saldo inicial del usuario
         const updateUserBalance = async (id_user, amount) => {
@@ -206,35 +211,48 @@ module.exports = (io) => {
           });
         }
 
-        // Obtener apuestas del equipo ganador
-        const bets = await getBets({ id_event, id_round, team });
-        if (bets.length === 0) {
-          return callback({
-            success: false,
-            message: "No hay apuestas que coincidan con el ganador seleccionado.",
-          });
+        // Obtener apuestas por equipo
+        const redBets = await getBets({ id_event, id_round, team: "red" });
+        const greenBets = await getBets({ id_event, id_round, team: "green" });
+
+        // Calcular sumas totales de apuestas
+        const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
+        const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
+
+        // Determinar equipo con menor y mayor apuesta
+        const [lowerTeam, higherTeam, lowerTotal, higherTotal] =
+          redTotal < greenTotal
+            ? ["red", "green", redTotal, greenTotal]
+            : ["green", "red", greenTotal, redTotal];
+
+        // Ajustar apuestas del equipo con mayor monto al menor monto
+        let remainingAmount = higherTotal - lowerTotal;
+        const higherBets = higherTeam === "red" ? redBets : greenBets;
+
+        for (const bet of higherBets) {
+          const refund = Math.min(bet.amount, remainingAmount); // Cantidad a devolver
+          if (refund > 0) {
+            await updateUserBalance(bet.id_user, refund);
+            remainingAmount -= refund;
+            await betting.update({ amount: bet.amount - refund }, { where: { id: bet.id } });
+          }
         }
 
-        // Calcular apuestas totales y por equipo
-        const [redBets, greenBets, totalAmount] = await Promise.all([
-          betting.sum('amount', { where: { id_event, id_round, team: "red" } }),
-          betting.sum('amount', { where: { id_event, id_round, team: "green" } }),
-          betting.sum('amount', { where: { id_event, id_round } }),
-        ]);
-
         // Registrar al equipo ganador
-        await winners.create({
+        const winnerData = {
           id_event,
           id_round,
           team_winner: team,
-          red_team_amount: redBets,
-          green_team_amount: greenBets,
-          total_amount: totalAmount,
-          earnings: totalAmount * 0.05,
-        });
+          red_team_amount: redTotal,
+          green_team_amount: greenTotal,
+          total_amount: lowerTotal * 2,
+          earnings: lowerTotal * 0.05,
+        };
+        await winners.create(winnerData);
 
         // Procesar retornos para las apuestas ganadoras
-        for (const { id_user, amount } of bets) {
+        const winningBets = team === "red" ? redBets : greenBets;
+        for (const { id_user, amount } of winningBets) {
           const totalReturn = amount * 1.9; // 100% de la apuesta + 90% de ganancia
           await updateUserBalance(id_user, totalReturn);
         }
