@@ -121,6 +121,28 @@ module.exports = (io) => {
       }
     })
 
+    socket.on("getAllActiveRounds", async ({ id_event }, callback) => {
+      try {
+        if (id_event) {
+          const activeRounds = await rounds.findAll({ where: { id_event, is_betting_active: true } });
+
+          if (activeRounds) {
+            callback({
+              success: true,
+              data: activeRounds,
+              message: "Rondas activas encontradas con éxito"
+            })
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        callback({
+          success: false,
+          message: "Error al encontrar las rondas activas"
+        })
+      }
+    })
+
     socket.on("toggleEvent", async ({ id_event, isOpen, id_round }, callback) => {
       try {
         if (id_round) {
