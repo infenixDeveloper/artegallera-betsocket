@@ -272,6 +272,8 @@ module.exports = (io) => {
         };
         await winners.create(winnerData);
 
+        const round = await rounds.findByPk(id_round);
+
         // Procesar retornos para las apuestas ganadoras
         const winningBets = team === "red" ? redBets : greenBets;
         for (const { id_user, amount } of winningBets) {
@@ -280,8 +282,8 @@ module.exports = (io) => {
         }
 
         // Emitir y devolver resultado
-        const message = team === "red" ? "GANADOR EQUIPO ROJO" : "GANADOR EQUIPO VERDE";
-        io.emit("winner", { success: true, message });
+        const message = team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDER`;
+        io.emit("winner", { success: true, message, team: team === "red" ? "ROJO" : "VERDER" });
 
         callback({
           success: true,

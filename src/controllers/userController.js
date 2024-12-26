@@ -108,7 +108,32 @@ const addBalance = async (req, res) => {
       { where: { id: id } }
     );
 
-    res.status(200).json({ message: "Saldo actualizado correctamente" });
+    res.status(200).json({ success: true, message: "Saldo actualizado correctamente" });
+  } catch (error) {
+    console.error("Error al actualizar el Saldo:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+const withdrawBalance = async (req, res) => {
+  const { id, balance } = req.body;
+
+  try {
+    const user = await users.findOne({ where: { id: id } })
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const newBalance = user.initial_balance - balance;
+
+    const response = await users.update(
+      { initial_balance: newBalance },
+      { where: { id: id } }
+    );
+    console.log(response);
+
+    res.status(200).json({ success: true, message: "Saldo actualizado correctamente" });
   } catch (error) {
     console.error("Error al actualizar el Saldo:", error);
     res.status(500).json({ message: "Error interno del servidor" });
@@ -132,4 +157,4 @@ const deleteUser = async (req, res) => {
 
 
 
-module.exports = { getUsers, updateUser, addBalance, deleteUser, getUserById }
+module.exports = { getUsers, updateUser, addBalance, withdrawBalance, deleteUser, getUserById }
