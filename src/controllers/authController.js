@@ -98,8 +98,6 @@ async function forgotPassword(req, res) {
     let result = {};
     try {
         let { username, password } = req.body;
-        console.log(username, password);
-
         let user = await users.findOne({ where: { username } });
         if (user) {
             user.password = bcrypt.hashSync(password, 10);
