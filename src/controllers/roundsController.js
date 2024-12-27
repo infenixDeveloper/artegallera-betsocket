@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { rounds, betting, users } = require("../db");
+const { rounds, betting, users, winners } = require("../db");
 const { Op } = require("sequelize");
 
 async function GetAll(req, res) {
@@ -35,6 +35,9 @@ async function GetRoundByEventId(req, res) {
             }, {
                 model: rounds,
                 as: "round"
+            }, {
+                model: winners,
+                as: "winner"
             }]
         },)
 

@@ -55,7 +55,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     earnings: {
       allowNull: false,
-      type: DataTypes.INTEGER,
+      type: DataTypes.FLOAT,
     }
   }, {
     sequelize,

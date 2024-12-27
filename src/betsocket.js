@@ -227,10 +227,10 @@ module.exports = (io) => {
             await updateUserBalance(id_user, amount);
           }
 
-          return callback({
-            success: true,
-            message: "Empate procesado correctamente.",
-          });
+          // return callback({
+          //   success: true,
+          //   message: "Empate procesado correctamente.",
+          // });
         }
 
         // Obtener apuestas por equipo
@@ -270,7 +270,13 @@ module.exports = (io) => {
           total_amount: lowerTotal * 2,
           earnings: lowerTotal * 0.05,
         };
-        await winners.create(winnerData);
+
+        const winner = await winners.create(winnerData);
+
+        if (winner) {
+          await betting.update({ id_winner: winner.id }, { where: { id_event, id_round } });
+        }
+
 
         const round = await rounds.findByPk(id_round);
 
@@ -282,8 +288,8 @@ module.exports = (io) => {
         }
 
         // Emitir y devolver resultado
-        const message = team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDER`;
-        io.emit("winner", { success: true, message, team: team === "red" ? "ROJO" : "VERDER" });
+        const message = team === "draw" ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDER`;
+        io.emit("winner", { success: true, message, team: team === "draw" ? "TABLA" : team === "red" ? "ROJO" : "VERDER" });
 
         callback({
           success: true,
