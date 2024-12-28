@@ -27,7 +27,6 @@ async function getWinnerByEvent(req, res) {
   let result = {}
   try {
     const { id } = req.params
-    console.log(id);
 
     const winner = await winners.findAll({
       where: { id_event: id },

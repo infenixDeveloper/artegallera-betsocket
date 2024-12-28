@@ -55,8 +55,6 @@ module.exports = (io) => {
     });
 
     socket.on("getBetStats", async ({ id_event, team, id_round }, callback) => {
-      console.log(id_event, team, id_round);
-
       try {
         const totalAmount = await betting.sum("amount", {
           where: {
@@ -205,8 +203,6 @@ module.exports = (io) => {
     });
 
     socket.on("selectWinner", async ({ id_event, id_round, team }, callback) => {
-      console.log(id_event, id_round, team);
-
       try {
         // Obtener todas las apuestas para el evento y la ronda
         const getBets = async (condition) => betting.findAll({ where: condition, order: [['createdAt', 'ASC']] });
@@ -226,11 +222,6 @@ module.exports = (io) => {
           for (const { id_user, amount } of bets) {
             await updateUserBalance(id_user, amount);
           }
-
-          // return callback({
-          //   success: true,
-          //   message: "Empate procesado correctamente.",
-          // });
         }
 
         // Obtener apuestas por equipo
@@ -304,6 +295,34 @@ module.exports = (io) => {
         });
       }
     });
+
+    socket.on("add-balance", async ({ id_user, amount }, callback) => {
+      try {
+        if (id_user && amount) {
+          const user = await users.findOne({ where: { id: id_user } });
+
+          if (user) {
+            const { initial_balance } = user;
+
+            await users.update(
+              { initial_balance: initial_balance + amount },
+              { where: { id: id_user } }
+            );
+
+            callback({ success: true, message: "Saldo actualizado correctamente." });
+            io.emit("new-balance", { success: true, message: "Saldo actualizado correctamente." });
+          } else {
+            callback({ success: false, message: "Usuario no encontrado." });
+          }
+        } else {
+          callback({ success: false, message: "Faltan datos para actualizar el saldo." });
+        }
+      } catch (error) {
+        console.error(error);
+        callback({ success: false, message: "Error al actualizar el saldo." });
+      }
+    }
+    )
 
   });
 };

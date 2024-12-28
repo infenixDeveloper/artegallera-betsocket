@@ -53,6 +53,29 @@ async function GetBetsByTeam(req, res) {
     }
 }
 
+const getBetsByRound = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const bets = await betting.findAll({
+            where: { id_round: id },
+            include: [
+                { model: users, attributes: ['username'] },
+            ],
+        });
+        return res.json({
+            success: true,
+            message: 'Apuestas encontradas',
+            data: bets
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Error al obtener las apuestas',
+            error: error.message
+        });
+    }
+}
 
 async function GetId(req, res) {
     const { id } = req.params;
@@ -168,5 +191,6 @@ module.exports = {
     Create,
     Update,
     Delete,
-    GetBetsByTeam
+    GetBetsByTeam,
+    getBetsByRound,
 };

@@ -131,7 +131,6 @@ const withdrawBalance = async (req, res) => {
       { initial_balance: newBalance },
       { where: { id: id } }
     );
-    console.log(response);
 
     res.status(200).json({ success: true, message: "Saldo actualizado correctamente" });
   } catch (error) {

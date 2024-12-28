@@ -85,8 +85,6 @@ const getPromotions = async (req, res) => {
 
     return res.status(500).json(result);
   }
-  console.log(result);
-
 
 };
 

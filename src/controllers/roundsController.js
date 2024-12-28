@@ -26,19 +26,14 @@ async function GetRoundByEventId(req, res) {
     try {
         const { id } = req.params
 
-        const allRounds = await betting.findAll({
+        const allRounds = await rounds.findAll({
             where: { id_event: id },
-            include: [{
-                model: users,
-                as: 'user',
-                attributes: ['id', 'first_name', 'last_name', 'username', 'email']
-            }, {
-                model: rounds,
-                as: "round"
-            }, {
-                model: winners,
-                as: "winner"
-            }]
+            include: [
+                {
+                    model: winners,
+                    as: 'winners',
+                },
+            ]
         },)
 
         if (allRounds) {
