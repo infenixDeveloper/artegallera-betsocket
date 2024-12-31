@@ -220,8 +220,20 @@ module.exports = (io) => {
           const bets = await getBets({ id_event, id_round });
 
           for (const { id_user, amount } of bets) {
-            await updateUserBalance(id_user, amount);
+            await updateUserBalance(id_user, amount); // Solo se devuelve el monto inicial
           }
+
+          const round = await rounds.findByPk(id_round);
+          const message = `EL RESULTADO DE LA PELEA ${round.round} ES TABLA`;
+
+          io.emit("winner", { success: true, message, team: "TABLA" });
+
+          callback({
+            success: true,
+            message: "Se ha procesado correctamente el resultado de empate y las apuestas.",
+          });
+
+          return;
         }
 
         // Obtener apuestas por equipo
@@ -321,9 +333,38 @@ module.exports = (io) => {
         console.error(error);
         callback({ success: false, message: "Error al actualizar el saldo." });
       }
-    }
-    )
+    });
 
+    socket.on("withdraw-balance", async ({ id_user, amount }, callback) => {
+      try {
+        if (id_user && amount) {
+          const user = await users.findOne({ where: { id: id_user } });
+
+          if (user) {
+            const { initial_balance } = user;
+
+            if (initial_balance < amount) {
+              return callback({ success: false, message: "Saldo insuficiente." });
+            }
+
+            await users.update(
+              { initial_balance: initial_balance - amount },
+              { where: { id: id_user } }
+            );
+
+            callback({ success: true, message: "Saldo actualizado correctamente." });
+            io.emit("new-balance", { success: true, message: "Saldo actualizado correctamente." });
+          } else {
+            callback({ success: false, message: "Usuario no encontrado." });
+          }
+        } else {
+          callback({ success: false, message: "Faltan datos para actualizar el saldo." });
+        }
+      } catch (error) {
+        console.error(error);
+        callback({ success: false, message: "Error al actualizar el saldo." });
+      }
+    });
   });
 };
 
