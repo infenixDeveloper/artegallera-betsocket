@@ -1,11 +1,20 @@
 var cron = require('node-cron');
-const { betting, events, rounds } = require('../db');
+const { betting, events, rounds,users} = require('../db');
 
 const updateBetsStatus = async (bets) => {
     for (const bet of bets) {
         await betting.update({ status: 1 }, { where: { id: bet.id } });
     }
 };
+
+const updateUserBalance = async (user, amount) => {
+    let UserData = await users.findOne({ where: { id: user } });
+    let newBalance = UserData.initial_balance + amount;
+    await users.update(
+        { initial_balance: newBalance },
+        { where: { id: user } }
+    );
+}
 
 const processBets = async (round, team, oppositeTeam) => {
     const teamBets = await betting.findAll({ where: { id_round: round.id, team, status: 0 } });
@@ -73,8 +82,12 @@ const VerificationBetting = async () => {
                                         }
                                     }
                                 }else {
-                                    await processBets(round, 'red', 'green');
-                                    await processBets(round, 'green', 'red');
+                                    bet.status = 2;
+                                    await bet.save();
+                                    await updateUserBalance(bet.id_user, bet.amount);
+
+                                    //await processBets(round, 'red', 'green');
+                                    //await processBets(round, 'green', 'red');
                                 }
                             }
                         }
@@ -88,7 +101,7 @@ const VerificationBetting = async () => {
 };
 
 
-cron.schedule('*/10 * * * *', async () => {
+cron.schedule('*/2 * * * *', async () => {
     console.log('running a task every minute');
     await VerificationBetting();
 });

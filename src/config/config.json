@@ -1,7 +1,8 @@
 {
   "development": {
     "username": "postgres",
-    "password": "root",
+    "password": "23124156",
+    "port": 5432,
     "database": "artegallera",
     "host": "127.0.0.1",
     "dialect": "postgres",
