@@ -23,7 +23,7 @@ const processBets = async (round, team, oppositeTeam) => {
     let totalTeamAmount = teamBets.reduce((sum, bet) => sum + bet.amount, 0);
     let totalOppositeTeamAmount = oppositeTeamBets.reduce((sum, bet) => sum + bet.amount, 0);
 
-    if (totalTeamAmount > totalOppositeTeamAmount) {
+    if (totalTeamAmount >= totalOppositeTeamAmount) {
         let selectedBets = [];
         let totalAmount = 0;
 
@@ -52,7 +52,7 @@ const VerificationBetting = async () => {
                     const minBetRound = await betting.min('amount', { where: { id_round: round.id, status: 1 } });
 
                     const bets = await betting.findAll({ where: { id_round: round.id, status: 0 } });
-                    console.log(bets.length);
+                    
                     for (const bet of bets) {
                         if (maxBetRound === null || minBetRound === null) {
                             await processBets(round, 'red', 'green');
@@ -105,3 +105,5 @@ cron.schedule('*/2 * * * *', async () => {
     console.log('running a task every minute');
     await VerificationBetting();
 });
+
+module.exports = VerificationBetting;
