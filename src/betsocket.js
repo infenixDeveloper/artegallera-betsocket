@@ -58,7 +58,7 @@ module.exports = (io) => {
       try {
         const totalAmount = await betting.sum("amount", {
           where: {
-            id_round, id_event, team
+            id_round, id_event, team, status: 1
           },
         });
         callback({ success: true, totalAmount: totalAmount || 0 });

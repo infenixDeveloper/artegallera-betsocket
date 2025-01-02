@@ -1,5 +1,6 @@
 var cron = require('node-cron');
-const { betting, events, rounds,users} = require('../db');
+const { betting, events, rounds, users } = require('../db');
+const { io2 } = require('../app.js');
 
 const updateBetsStatus = async (bets) => {
     for (const bet of bets) {
@@ -23,7 +24,7 @@ const processBets = async (round, team, oppositeTeam) => {
     let totalTeamAmount = teamBets.reduce((sum, bet) => sum + bet.amount, 0);
     let totalOppositeTeamAmount = oppositeTeamBets.reduce((sum, bet) => sum + bet.amount, 0);
 
-    if (totalTeamAmount > totalOppositeTeamAmount) {
+    if (totalTeamAmount >= totalOppositeTeamAmount) {
         let selectedBets = [];
         let totalAmount = 0;
 
@@ -52,7 +53,7 @@ const VerificationBetting = async () => {
                     const minBetRound = await betting.min('amount', { where: { id_round: round.id, status: 1 } });
 
                     const bets = await betting.findAll({ where: { id_round: round.id, status: 0 } });
-                    console.log(bets.length);
+
                     for (const bet of bets) {
                         if (maxBetRound === null || minBetRound === null) {
                             await processBets(round, 'red', 'green');
@@ -81,14 +82,18 @@ const VerificationBetting = async () => {
                                             remainingAmount = 0;
                                         }
                                     }
-                                }else {
+                                } else {
                                     bet.status = 2;
                                     await bet.save();
                                     await updateUserBalance(bet.id_user, bet.amount);
+                                    console.log(io2);
 
-                                    //await processBets(round, 'red', 'green');
-                                    //await processBets(round, 'green', 'red');
+                                    io2.emit('betting', { message: 'betting', data: { id_round: round.id } });
                                 }
+
+                            } else {
+                                await processBets(round, 'red', 'green');
+                                await processBets(round, 'green', 'red');
                             }
                         }
                     }
@@ -101,7 +106,7 @@ const VerificationBetting = async () => {
 };
 
 
-cron.schedule('*/2 * * * *', async () => {
+cron.schedule('*/1 * * * *', async () => {
     console.log('running a task every minute');
     await VerificationBetting();
 });

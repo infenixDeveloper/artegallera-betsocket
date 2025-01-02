@@ -80,4 +80,4 @@ http2.listen(process.env.BETPORT || 3003, () => {
 });
 
 
-module.exports = server;
+module.exports = { server, io, io2 };
