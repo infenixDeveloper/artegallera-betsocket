@@ -40,7 +40,7 @@ const processBets = async (round, team, oppositeTeam) => {
     }
 };
 
-const VerificationBetting = async () => {
+const VerificationBetting = async (io) => {
     try {
         const event = await events.findOne({ where: { is_active: true } });
 
@@ -106,7 +106,9 @@ const VerificationBetting = async () => {
 };
 
 
-cron.schedule('*/1 * * * *', async () => {
+cron.schedule('*/2 * * * *', async (io) => {
     console.log('running a task every minute');
-    await VerificationBetting();
+    await VerificationBetting(io);
 });
+
+module.exports = VerificationBetting;
