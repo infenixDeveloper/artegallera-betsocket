@@ -1,6 +1,6 @@
 var cron = require('node-cron');
 const { betting, events, rounds, users } = require('../db');
-const { io2 } = require('../app.js');
+const io = require("../app.js").io2;
 
 const updateBetsStatus = async (bets) => {
     for (const bet of bets) {
@@ -40,12 +40,14 @@ const processBets = async (round, team, oppositeTeam) => {
     }
 };
 
-const VerificationBetting = async (io) => {
+const VerificationBetting = async () => {
     try {
         const event = await events.findOne({ where: { is_active: true } });
+        console.log(event);
 
         if (event) {
             const roundAll = await rounds.findAll({ where: { id_event: event.id, is_betting_active: true } });
+            console.log(roundAll);
 
             if (roundAll) {
                 for (const round of roundAll) {
@@ -86,9 +88,8 @@ const VerificationBetting = async (io) => {
                                     bet.status = 2;
                                     await bet.save();
                                     await updateUserBalance(bet.id_user, bet.amount);
-                                    console.log(io2);
 
-                                    io2.emit('betting', { message: 'betting', data: { id_round: round.id } });
+                                    io.emit('betting', { message: 'betting', data: { id_round: round.id } });
                                 }
 
                             } else {
@@ -106,9 +107,7 @@ const VerificationBetting = async (io) => {
 };
 
 
-cron.schedule('*/2 * * * *', async (io) => {
+cron.schedule('*/1 * * * *', async () => {
     console.log('running a task every minute');
-    await VerificationBetting(io);
+    await VerificationBetting();
 });
-
-module.exports = VerificationBetting;

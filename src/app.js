@@ -31,7 +31,7 @@ const io2 = require("socket.io")(http2, {
 
 require('./websocket.js')(io);
 require('./betsocket.js')(io2);
-require('./crontab/VerificationBetting.js')(io2);
+require('./crontab/VerificationBetting.js');
 
 server.name = "arteGallera";
 
@@ -80,4 +80,4 @@ http2.listen(process.env.BETPORT || 3003, () => {
 });
 
 
-module.exports = { server, io, io2 };
+module.exports = server;
