@@ -1,8 +1,13 @@
 const { betting, users, events, rounds, winners } = require("./db");
+const VerificationBetting = require("./crontab/VerificationBetting");
 
 module.exports = (io) => {
   io.on("connection", (socket) => {
     console.log("New connection to bets socket");
+
+    setInterval(async () => {
+      await VerificationBetting(io);
+    }, 2000);
 
     socket.on("disconnect", () => {
       console.log("User disconnected from bets socket");
@@ -43,7 +48,7 @@ module.exports = (io) => {
         io.emit('newBet', newBet);
 
         const totalAmount = await betting.sum('amount', {
-          where: { id_event, team, id_round }
+          where: { id_event, team, id_round, status: 1 }
         });
 
         io.emit("updatedTotalAmount", { team, totalAmount });
@@ -217,7 +222,7 @@ module.exports = (io) => {
 
         // Procesar empate
         if (team === "draw") {
-          const bets = await getBets({ id_event, id_round });
+          const bets = await getBets({ id_event, id_round, status: 1 });
 
           for (const { id_user, amount } of bets) {
             await updateUserBalance(id_user, amount); // Solo se devuelve el monto inicial
@@ -237,8 +242,8 @@ module.exports = (io) => {
         }
 
         // Obtener apuestas por equipo
-        const redBets = await getBets({ id_event, id_round, team: "red" });
-        const greenBets = await getBets({ id_event, id_round, team: "green" });
+        const redBets = await getBets({ id_event, id_round, team: "red", status: 1 });
+        const greenBets = await getBets({ id_event, id_round, team: "green", status: 1 });
 
         // Calcular sumas totales de apuestas
         const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
@@ -283,11 +288,12 @@ module.exports = (io) => {
 
         const round = await rounds.findByPk(id_round);
 
-        // Procesar retornos para las apuestas ganadoras
-        const winningBets = team === "red" ? redBets : greenBets;
-        for (const { id_user, amount } of winningBets) {
-          const totalReturn = amount * 1.9; // 100% de la apuesta + 90% de ganancia
-          await updateUserBalance(id_user, totalReturn);
+        // Devolver monto de apuesta + 90% a los ganadores
+        const winningBets = lowerTeam === "red" ? redBets : greenBets;
+        for (const bet of winningBets) {
+          const payout = bet.amount + (bet.amount * 0.9);
+          await updateUserBalance(bet.id_user, payout);
+          await betting.update({ status: 1 }, { where: { id: bet.id } });
         }
 
         // Emitir y devolver resultado

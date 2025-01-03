@@ -1,6 +1,5 @@
 var cron = require('node-cron');
 const { betting, events, rounds, users } = require('../db');
-const io = require("../app.js").io2;
 
 const updateBetsStatus = async (bets) => {
     for (const bet of bets) {
@@ -40,14 +39,12 @@ const processBets = async (round, team, oppositeTeam) => {
     }
 };
 
-const VerificationBetting = async () => {
+const VerificationBetting = async (io) => {
     try {
         const event = await events.findOne({ where: { is_active: true } });
-        console.log(event);
 
         if (event) {
             const roundAll = await rounds.findAll({ where: { id_event: event.id, is_betting_active: true } });
-            console.log(roundAll);
 
             if (roundAll) {
                 for (const round of roundAll) {
@@ -72,7 +69,6 @@ const VerificationBetting = async () => {
                                 if (bet.amount + totalTeamBets <= totalOppositeTeamAmount) {
                                     await betting.update({ status: 1 }, { where: { id: bet.id } });
                                     let remainingAmount = bet.amount;
-
                                     for (const oppositeBet of oppositeTeamBets) {
                                         if (remainingAmount <= 0) break;
 
@@ -84,14 +80,15 @@ const VerificationBetting = async () => {
                                             remainingAmount = 0;
                                         }
                                     }
+                                    io.emit('Statusbetting', { id: bet.id_user, amount: bet.amount, status: "aceptada" });
                                 } else {
-                                    bet.status = 2;
-                                    await bet.save();
-                                    await updateUserBalance(bet.id_user, bet.amount);
-
-                                    io.emit('betting', { message: 'betting', data: { id_round: round.id } });
+                                    await processBets(round, 'red', 'green');
+                                    await processBets(round, 'green', 'red');
+                                    // bet.status = 2;
+                                    // await bet.save();
+                                    // await updateUserBalance(bet.id_user, bet.amount);
+                                    io.emit('Statusbetting', { id: bet.id_user, amount: bet.amount, status: "rechazada" });
                                 }
-
                             } else {
                                 await processBets(round, 'red', 'green');
                                 await processBets(round, 'green', 'red');
@@ -99,15 +96,17 @@ const VerificationBetting = async () => {
                         }
                     }
                 }
+            } else {
+                io.emit('Statusbetting', { id: 0, amount: 0, status: "No hay ronda activos" });
+                console.log("No hay ronda activos");
             }
+        } else {
+            io.emit('Statusbetting', { id: 0, amount: 0, status: "No hay eventos activos" });
+            console.log("No hay eventos activos");
         }
     } catch (error) {
         console.error('Error in VerificationBetting:', error);
     }
 };
 
-
-cron.schedule('*/1 * * * *', async () => {
-    console.log('running a task every minute');
-    await VerificationBetting();
-});
+module.exports = VerificationBetting;
