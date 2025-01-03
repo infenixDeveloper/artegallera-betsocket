@@ -1,8 +1,13 @@
 const { betting, users, events, rounds, winners } = require("./db");
+const VerificationBetting =require("./crontab/VerificationBetting");
 
 module.exports = (io) => {
   io.on("connection", (socket) => {
     console.log("New connection to bets socket");
+
+    setInterval(async (io) => {
+      await VerificationBetting(io);
+    }, 1000);
 
     socket.on("disconnect", () => {
       console.log("User disconnected from bets socket");

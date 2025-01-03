@@ -69,7 +69,7 @@ const VerificationBetting = async (io) => {
                                 if (bet.amount + totalTeamBets <= totalOppositeTeamAmount) {
                                     await betting.update({ status: 1 }, { where: { id: bet.id } });
                                     let remainingAmount = bet.amount;
-
+                                    io.emit('Statusbetting', { id: bet.id_user, amount: bet.amount,status:"aceptada" });
                                     for (const oppositeBet of oppositeTeamBets) {
                                         if (remainingAmount <= 0) break;
 
@@ -85,25 +85,26 @@ const VerificationBetting = async (io) => {
                                     bet.status = 2;
                                     await bet.save();
                                     await updateUserBalance(bet.id_user, bet.amount);
-
-                                    //await processBets(round, 'red', 'green');
-                                    //await processBets(round, 'green', 'red');
+                                    io.emit('Statusbetting', { id: bet.id_user, amount: bet.amount,status:"rechazada" });
                                 }
+                            }else{
+                                await processBets(round, 'red', 'green');
+                                await processBets(round, 'green', 'red');
                             }
                         }
                     }
                 }
+            }else{
+                io.emit('Statusbetting', { id: 0, amount: 0,status:"No hay ronda activos" });
+                console.log("No hay ronda activos");
             }
+        }else{
+            io.emit('Statusbetting', { id: 0, amount: 0,status:"No hay eventos activos" });
+            console.log("No hay eventos activos");
         }
     } catch (error) {
         console.error('Error in VerificationBetting:', error);
     }
 };
-
-
-cron.schedule('*/2 * * * *', async (io) => {
-    console.log('running a task every minute');
-    await VerificationBetting(io);
-});
 
 module.exports = VerificationBetting;
