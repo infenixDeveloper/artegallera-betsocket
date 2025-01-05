@@ -1,13 +1,12 @@
-const { betting, users, events, rounds, winners } = require("./db");
-const VerificationBetting = require("./crontab/VerificationBetting");
+const { betting, users, events, rounds, winners } = require("./db.js");
+const VerificationBetting = require("./crontab/VerificationBetting.js");
 
 module.exports = (io) => {
+  setInterval(async () => {
+    await VerificationBetting(io);
+  }, 15000);
   io.on("connection", (socket) => {
     console.log("New connection to bets socket");
-
-    setInterval(async () => {
-      await VerificationBetting(io);
-    }, 2000);
 
     socket.on("disconnect", () => {
       console.log("User disconnected from bets socket");
@@ -61,12 +60,17 @@ module.exports = (io) => {
 
     socket.on("getBetStats", async ({ id_event, team, id_round }, callback) => {
       try {
-        const totalAmount = await betting.sum("amount", {
-          where: {
-            id_round, id_event, team, status: 1
-          },
-        });
-        callback({ success: true, totalAmount: totalAmount || 0 });
+        if (typeof id_event === 'undefined' || typeof id_round === 'undefined') {
+          callback({ success: false, message: "Error al obtener estadísticas" });
+        }else{
+          const totalAmount = await betting.sum("amount", {
+            where: {
+              id_round, id_event, team, status: 1
+            },
+          });
+          callback({ success: true, totalAmount: totalAmount || 0 });
+        }
+        
       } catch (error) {
         console.error("Error al obtener estadísticas:", error);
         callback({ success: false, message: "Error al obtener estadísticas" });
@@ -180,23 +184,16 @@ module.exports = (io) => {
 
     socket.on("getRoundStatus", async ({ id_event, id }, callback) => {
       try {
-        const event = await events.findOne({
-          where: { id: id_event },
-        });
-
-        if (event) {
-          const round = await rounds.findByPk(id);
-
-          callback({
-            success: true,
-            data: {
-              event,
-              round,
-            },
-          });
-
-        } else {
-          callback({ success: false, message: "Evento no encontrado" });
+        if (typeof id_event === 'undefined' || typeof id === 'undefined') {
+          callback({ success: false, message: "Error al obtener getRoundStatus" });
+        }else{
+          const event = await events.findOne({where: { id: id_event }});
+          if (event) {
+            const round = await rounds.findByPk(id);
+            callback({success: true,data: {event,round}});
+          } else {
+            callback({ success: false, message: "Evento no encontrado" });
+          }
         }
       } catch (error) {
         console.error("Error al obtener estado del evento:", error);
@@ -313,6 +310,14 @@ module.exports = (io) => {
         });
       }
     });
+
+    socket.on("Statusbetting", async ({ message,status }, callback) => {
+      try {
+        callback({ success: true, status: status, message: message});
+      } catch (error) {
+        callback({ success: false, message: "Error al actualizar la apuesta" });
+      }
+    })
 
     socket.on("add-balance", async ({ id_user, amount }, callback) => {
       try {
