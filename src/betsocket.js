@@ -68,7 +68,7 @@ module.exports = (io) => {
             id_round, id_event, team, status: [0, 1]
           },
         });
-        callback({ success: true, totalAmount: totalAmount || 0 });
+        callback({ success: true, totalAmount: totalAmount });
       } catch (error) {
         console.error("Error al obtener estadísticas:", error);
         callback({ success: false, message: "Error al obtener estadísticas" });
