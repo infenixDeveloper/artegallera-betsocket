@@ -1,5 +1,5 @@
 const { betting, users, events, rounds, winners } = require("./db.js");
-const VerificationBetting = require("./crontab/VerificationBetting.js");
+const {VerificationBetting, VerificationBettingRound} = require("./crontab/VerificationBetting.js");
 
 module.exports = (io) => {
   setInterval(async () => {
@@ -176,7 +176,7 @@ module.exports = (io) => {
               id: id_round,
             },
           });
-
+          await VerificationBettingRound(io);
           if (round) {
             await round.update({ is_betting_active: isOpen });
             io.emit("isBettingActive", { success: true, data: round, message: isOpen ? "Ronda Activo" : "Ronda Inactivo" });
