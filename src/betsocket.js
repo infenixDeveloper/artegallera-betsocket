@@ -4,9 +4,11 @@ const VerificationBetting = require("./crontab/VerificationBetting.js");
 module.exports = (io) => {
   setInterval(async () => {
     await VerificationBetting(io);
-  }, 15000);
+  }, 20000);
+
   io.on("connection", (socket) => {
     console.log("New connection to bets socket");
+
 
     socket.on("disconnect", () => {
       console.log("User disconnected from bets socket");
@@ -36,7 +38,8 @@ module.exports = (io) => {
           id_event,
           amount,
           team,
-          id_round
+          id_round,
+          status: 0
         });
 
         await users.update(
@@ -60,22 +63,35 @@ module.exports = (io) => {
 
     socket.on("getBetStats", async ({ id_event, team, id_round }, callback) => {
       try {
-        if (typeof id_event === 'undefined' || typeof id_round === 'undefined') {
-          callback({ success: false, message: "Error al obtener estadísticas" });
-        }else{
-          const totalAmount = await betting.sum("amount", {
-            where: {
-              id_round, id_event, team, status: 1
-            },
-          });
-          callback({ success: true, totalAmount: totalAmount || 0 });
-        }
-        
+        const totalAmount = await betting.sum("amount", {
+          where: {
+            id_round, id_event, team, status: [0, 1]
+          },
+        });
+        callback({ success: true, totalAmount: totalAmount || 0 });
       } catch (error) {
         console.error("Error al obtener estadísticas:", error);
         callback({ success: false, message: "Error al obtener estadísticas" });
       }
     });
+
+    socket.on("Statusbetting", async ({ id, amount, status }, callback) => {
+      try {
+        const bet = await betting.findByPk(id);
+        if (bet) {
+          await bet.update({ amount, status });
+          // io.emit("Statusbetting", { success: true, data: bet, message: "Apuesta actualizada con éxito" });
+          callback({ success: true, data: bet, message: "Apuesta actualizada con éxito" });
+        } else {
+          // io.emit("Statusbetting", { success: false, message: "Apuesta no encontrada" });
+          callback({ success: false, message: "Apuesta no encontrada" });
+        }
+      } catch (error) {
+        console.error("Error al actualizar la apuesta:", error);
+        // io.emit("Statusbetting", { success: false, message: "Error al actualizar la apuesta" });
+        callback({ success: false, message: "Error al actualizar la apuesta" });
+      }
+    })
 
     socket.on("createRound", async ({ id_event }, callback) => {
       try {
@@ -151,6 +167,8 @@ module.exports = (io) => {
     })
 
     socket.on("toggleEvent", async ({ id_event, isOpen, id_round }, callback) => {
+      console.log(id_event, isOpen, id_round);
+
       try {
         if (id_round) {
           const round = await rounds.findOne({
