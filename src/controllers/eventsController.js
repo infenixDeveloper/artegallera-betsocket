@@ -50,6 +50,9 @@ async function GetId(req, res) {
 async function Create(req, res) {
     let result = {};
     try {
+        //verifica y cambia el is_active a false de los eventos que esten activos
+        await events.update({ is_active: false }, { where: { is_active: true } });
+        
         let { name, date, time, location, is_active, is_betting_active } = req.body;
         let dtaevent = await events.create({ name, date, time, location, is_active, is_betting_active });
         if (dtaevent) {

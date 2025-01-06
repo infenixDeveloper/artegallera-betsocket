@@ -46,8 +46,8 @@ const evaluateBets = async (round, bet, io) => {
     // Verificar si la apuesta desnivela aún más los pozos
     if (totalTeamAmount > totalOppositeAmount && (totalTeamAmount + bet.amount) > totalOppositeAmount) {
         // Rechazar la apuesta
-        await updateBetStatus([bet], 2); // Rechazada
-        await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
+        //await updateBetStatus([bet], 2); // Rechazada
+        //await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
 
         // Emitir la información de la apuesta rechazada
         io.emit('Statusbetting', {
@@ -125,8 +125,8 @@ const evaluateBets = async (round, bet, io) => {
     }
 
     // Si ninguna condición se cumple, rechazar la apuesta
-    await updateBetStatus([bet], 2); // Rechazada
-    await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
+    //await updateBetStatus([bet], 2); // Rechazada
+    //await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
 
     // Emitir la información de la apuesta rechazada
     io.emit('Statusbetting', {

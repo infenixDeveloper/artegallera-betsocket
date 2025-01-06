@@ -1,5 +1,5 @@
-const { betting, users, events, rounds, winners } = require("./db");
-const VerificationBetting = require("./crontab/VerificationBetting");
+const { betting, users, events, rounds, winners } = require("./db.js");
+const VerificationBetting = require("./crontab/VerificationBetting.js");
 
 module.exports = (io) => {
   setInterval(async () => {
@@ -202,23 +202,16 @@ module.exports = (io) => {
 
     socket.on("getRoundStatus", async ({ id_event, id }, callback) => {
       try {
-        const event = await events.findOne({
-          where: { id: id_event },
-        });
-
-        if (event) {
-          const round = await rounds.findByPk(id);
-
-          callback({
-            success: true,
-            data: {
-              event,
-              round,
-            },
-          });
-
-        } else {
-          callback({ success: false, message: "Evento no encontrado" });
+        if (typeof id_event === 'undefined' || typeof id === 'undefined') {
+          callback({ success: false, message: "Error al obtener getRoundStatus" });
+        }else{
+          const event = await events.findOne({where: { id: id_event }});
+          if (event) {
+            const round = await rounds.findByPk(id);
+            callback({success: true,data: {event,round}});
+          } else {
+            callback({ success: false, message: "Evento no encontrado" });
+          }
         }
       } catch (error) {
         console.error("Error al obtener estado del evento:", error);
@@ -335,6 +328,14 @@ module.exports = (io) => {
         });
       }
     });
+
+    socket.on("Statusbetting", async ({ message,status }, callback) => {
+      try {
+        callback({ success: true, status: status, message: message});
+      } catch (error) {
+        callback({ success: false, message: "Error al actualizar la apuesta" });
+      }
+    })
 
     socket.on("add-balance", async ({ id_user, amount }, callback) => {
       try {

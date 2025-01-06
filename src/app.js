@@ -31,7 +31,6 @@ const io2 = require("socket.io")(http2, {
 
 require('./websocket.js')(io);
 require('./betsocket.js')(io2);
-// require('./crontab/VerificationBetting.js');
 
 server.name = "arteGallera";
 
