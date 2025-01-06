@@ -1,5 +1,5 @@
 const { betting, users, events, rounds, winners } = require("./db.js");
-const VerificationBetting = require("./crontab/VerificationBetting.js");
+const { VerificationBetting, VerificationBettingRound } = require("./crontab/VerificationBetting.js");
 
 module.exports = (io) => {
   setInterval(async () => {
@@ -174,7 +174,7 @@ module.exports = (io) => {
               id: id_round,
             },
           });
-
+          await VerificationBettingRound(io);
           if (round) {
             await round.update({ is_betting_active: isOpen });
             io.emit("isBettingActive", { success: true, data: round, message: isOpen ? "Ronda Activo" : "Ronda Inactivo" });
@@ -240,6 +240,24 @@ module.exports = (io) => {
           for (const { id_user, amount } of bets) {
             await updateUserBalance(id_user, amount); // Solo se devuelve el monto inicial
           }
+
+          const redBets = await getBets({ id_event, id_round, team: "red", status: 1 });
+          const greenBets = await getBets({ id_event, id_round, team: "green", status: 1 });
+
+          const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
+          const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
+
+          const drawData = {
+            id_event,
+            id_round,
+            team_winner: "draw",
+            red_team_amount: redTotal, // Puedes agregar valores simbólicos para empate
+            green_team_amount: greenTotal,
+            total_amount: redTotal + greenTotal,
+            earnings: 0, // No hay ganancias en un empate
+          };
+
+          await winners.create(drawData); // Ajusta si usas otra tabla
 
           const round = await rounds.findByPk(id_round);
           const message = `EL RESULTADO DE LA PELEA ${round.round} ES TABLA`;
@@ -310,8 +328,8 @@ module.exports = (io) => {
         }
 
         // Emitir y devolver resultado
-        const message = team === "draw" ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDER`;
-        io.emit("winner", { success: true, message, team: team === "draw" ? "TABLA" : team === "red" ? "ROJO" : "VERDER" });
+        const message = team === "draw" ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDE`;
+        io.emit("winner", { success: true, message, team: team === "draw" ? "TABLA" : team === "red" ? "ROJO" : "VERDE" });
 
         callback({
           success: true,
