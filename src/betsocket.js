@@ -2,12 +2,13 @@ const { betting, users, events, rounds, winners } = require("./db");
 const VerificationBetting = require("./crontab/VerificationBetting");
 
 module.exports = (io) => {
+  setInterval(async () => {
+    await VerificationBetting(io);
+  }, 20000);
+
   io.on("connection", (socket) => {
     console.log("New connection to bets socket");
 
-    setInterval(async () => {
-      await VerificationBetting(io);
-    }, 2000);
 
     socket.on("disconnect", () => {
       console.log("User disconnected from bets socket");
@@ -37,7 +38,8 @@ module.exports = (io) => {
           id_event,
           amount,
           team,
-          id_round
+          id_round,
+          status: 0
         });
 
         await users.update(
@@ -63,7 +65,7 @@ module.exports = (io) => {
       try {
         const totalAmount = await betting.sum("amount", {
           where: {
-            id_round, id_event, team, status: 1
+            id_round, id_event, team, status: [0, 1]
           },
         });
         callback({ success: true, totalAmount: totalAmount || 0 });
@@ -165,6 +167,8 @@ module.exports = (io) => {
     })
 
     socket.on("toggleEvent", async ({ id_event, isOpen, id_round }, callback) => {
+      console.log(id_event, isOpen, id_round);
+
       try {
         if (id_round) {
           const round = await rounds.findOne({
