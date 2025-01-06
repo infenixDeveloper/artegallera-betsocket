@@ -148,7 +148,6 @@ const processRoundBets = async (round, io) => {
     }
 };
 
-
 const VerificationBetting = async (io) => {
     try {
         const activeEvent = await events.findOne({ where: { is_active: true } });
