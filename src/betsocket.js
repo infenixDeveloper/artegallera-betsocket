@@ -307,7 +307,7 @@ module.exports = (io) => {
           red_team_amount: redTotal,
           green_team_amount: greenTotal,
           total_amount: lowerTotal * 2,
-          earnings: lowerTotal * 0.05,
+          earnings: lowerTotal * 0.1,
         };
 
         const winner = await winners.create(winnerData);
