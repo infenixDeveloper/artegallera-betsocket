@@ -320,7 +320,7 @@ module.exports = (io) => {
         const round = await rounds.findByPk(id_round);
 
         // Devolver monto de apuesta + 90% a los ganadores
-        const winningBets = lowerTeam === "red" ? redBets : greenBets;
+        const winningBets = team === "red" ? redBets : greenBets;
         for (const bet of winningBets) {
           const payout = bet.amount + (bet.amount * 0.9);
           await updateUserBalance(bet.id_user, payout);
