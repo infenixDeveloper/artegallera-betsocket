@@ -281,23 +281,23 @@ module.exports = (io) => {
         const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
 
         // Determinar equipo con menor y mayor apuesta
-        const [lowerTeam, higherTeam, lowerTotal, higherTotal] =
-          redTotal < greenTotal
-            ? ["red", "green", redTotal, greenTotal]
-            : ["green", "red", greenTotal, redTotal];
+        //const [lowerTeam, higherTeam, lowerTotal, higherTotal] =
+        //  redTotal < greenTotal
+        //    ? ["red", "green", redTotal, greenTotal]
+        //    : ["green", "red", greenTotal, redTotal];
 
         // Ajustar apuestas del equipo con mayor monto al menor monto
-        let remainingAmount = higherTotal - lowerTotal;
-        const higherBets = higherTeam === "red" ? redBets : greenBets;
+        //let remainingAmount = higherTotal - lowerTotal;
+        //const higherBets = higherTeam === "red" ? redBets : greenBets;
 
-        for (const bet of higherBets) {
-          const refund = Math.min(bet.amount, remainingAmount); // Cantidad a devolver
-          if (refund > 0) {
-            await updateUserBalance(bet.id_user, refund);
-            remainingAmount -= refund;
-            await betting.update({ amount: bet.amount - refund }, { where: { id: bet.id } });
-          }
-        }
+        //for (const bet of higherBets) {
+        //  const refund = Math.min(bet.amount, remainingAmount); // Cantidad a devolver
+        //  if (refund > 0) {
+        //    await updateUserBalance(bet.id_user, refund);
+        //    remainingAmount -= refund;
+        //    await betting.update({ amount: bet.amount - refund }, { where: { id: bet.id } });
+        //  }
+        //}
 
         // Registrar al equipo ganador
         const winnerData = {
@@ -306,8 +306,8 @@ module.exports = (io) => {
           team_winner: team,
           red_team_amount: redTotal,
           green_team_amount: greenTotal,
-          total_amount: lowerTotal * 2,
-          earnings: lowerTotal * 0.1,
+          total_amount: team === "red" ? redTotal* 2 : greenTotal * 2,
+          earnings: team === "red" ? redTotal* 0.1 : greenTotal * 0.1,
         };
 
         const winner = await winners.create(winnerData);
@@ -320,7 +320,7 @@ module.exports = (io) => {
         const round = await rounds.findByPk(id_round);
 
         // Devolver monto de apuesta + 90% a los ganadores
-        const winningBets = lowerTeam === "red" ? redBets : greenBets;
+        const winningBets = team === "red" ? redBets : greenBets;
         for (const bet of winningBets) {
           const payout = bet.amount + (bet.amount * 0.9);
           await updateUserBalance(bet.id_user, payout);
