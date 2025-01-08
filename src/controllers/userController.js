@@ -139,6 +139,16 @@ const withdrawBalance = async (req, res) => {
   }
 };
 
+const getTotalAmount = async (req, res) => {
+  try {
+    const totalAmount = await users.sum('initial_balance');
+    return res.json({ success: true, total: totalAmount });
+  } catch (error) {
+    console.error("Error al obtener el monto total:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+}
+
 const deleteUser = async (req, res) => {
   let result = {}
   const { id } = req.params;
@@ -156,4 +166,4 @@ const deleteUser = async (req, res) => {
 
 
 
-module.exports = { getUsers, updateUser, addBalance, withdrawBalance, deleteUser, getUserById }
+module.exports = { getUsers, updateUser, addBalance, withdrawBalance, deleteUser, getUserById, getTotalAmount }

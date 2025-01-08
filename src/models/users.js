@@ -53,7 +53,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     initial_balance: {
       allowNull: false,
-      type: DataTypes.DOUBLE
+      type: DataTypes.INTEGER
     },
     image: {
       allowNull: true,
