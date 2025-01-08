@@ -154,8 +154,6 @@ const processRoundBets = async (round, io) => {
 };
 
 const evaluateBetsRound = async (round,io) => {
-
-   
     const teamBetsRed = await betting.findAll({
         where: {
             id_round: round.id,
@@ -176,33 +174,51 @@ const evaluateBetsRound = async (round,io) => {
     const totalAmountRed = teamBetsRed.reduce((sum, bet) => sum + bet.amount, 0);
     const totalAmountGreen = teamBetsGreen.reduce((sum, bet) => sum + bet.amount, 0);
 
-    if(totalAmountRed !== totalAmountGreen){
-        for (const redBet of teamBetsRed) {
+    if (totalAmountRed !== totalAmountGreen) {
+        for (const bet of teamBetsRed) {
             let matched = false;
-            for (const greenBet of teamBetsGreen) {
-                if (redBet.amount === greenBet.amount) {
+            for (const oppositeBet of teamBetsGreen) {
+                if (bet.amount === oppositeBet.amount && oppositeBet.status === 0) {
+                    await updateBetStatus([bet, oppositeBet], 1);
+                    io.emit('Statusbetting', {
+                        status: 'accepted',
+                        bets: [bet, oppositeBet],
+                        message: 'Apuesta aceptada contra otro jugador.'
+                    });
                     matched = true;
                     break;
                 }
             }
             if (!matched) {
-                await betting.update({ status: 2 }, { where: { id: redBet.id } });
-            }
-        }
-    
-        for (const greenBet of teamBetsGreen) {
-            let matched = false;
-            for (const redBet of teamBetsRed) {
-                if (greenBet.amount === redBet.amount) {
-                    matched = true;
-                    break;
-                }
-            }
-            if (!matched) {
-                await betting.update({ status: 2 }, { where: { id: greenBet.id } });
+                await betting.update({ status: 2 }, { where: { id: bet.id } });
             }
         }
 
+        for (const bet of teamBetsGreen) {
+            let matched = false;
+            for (const oppositeBet of teamBetsRed) {
+                if (bet.amount === oppositeBet.amount && oppositeBet.status === 0) {
+                    await updateBetStatus([bet, oppositeBet], 1);
+                    io.emit('Statusbetting', {
+                        status: 'accepted',
+                        bets: [bet, oppositeBet],
+                        message: 'Apuesta aceptada contra otro jugador.'
+                    });
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                await betting.update({ status: 2 }, { where: { id: bet.id } });
+            }
+        }
+    } else {
+        await updateBetStatus([...teamBetsRed, ...teamBetsGreen], 1);
+        io.emit('Statusbetting', {
+            status: 'accepted',
+            bets: [...teamBetsRed, ...teamBetsGreen],
+            message: 'Apuestas aceptadas.'
+        });
     }
     /*if (totalTeamAmount > totalOppositeAmount && (totalTeamAmount + bet.amount) > totalOppositeAmount) {
         // Rechazar la apuesta
@@ -218,70 +234,7 @@ const evaluateBetsRound = async (round,io) => {
 
         return;
     } 
-    // Condición 1: Usuario vs. Usuario
-    const exactMatch = oppositeBets.find(oppositeBet => oppositeBet.amount === bet.amount && oppositeBet.status === 0);
-    if (exactMatch) {
-        await updateBetStatus([bet, exactMatch], 1); // Marcar ambas apuestas como aceptadas
-
-        // Emitir la información de las apuestas aceptadas
-        io.emit('Statusbetting', {
-            status: 'accepted',
-            bets: [bet, exactMatch],
-            message: 'Apuesta aceptada contra otro jugador.'
-        });
-
-        return;
-    }
-
-    // Condición 2: Usuario vs. Grupo
-    let groupMatch = [];
-    let totalAmount = 0;
-    for (const oppositeBet of oppositeBets.filter(b => b.status === 0)) {
-        if (totalAmount + oppositeBet.amount <= bet.amount) {
-            groupMatch.push(oppositeBet);
-            totalAmount += oppositeBet.amount;
-        }
-        if (totalAmount === bet.amount) {
-            await updateBetStatus([bet, ...groupMatch], 1); // Marcar apuestas como aceptadas
-
-            // Emitir la información de las apuestas aceptadas
-            io.emit('Statusbetting', {
-                status: 'accepted',
-                bets: [bet, ...groupMatch],
-                message: 'Apuesta aceptada contra un grupo de jugadores.'
-            });
-
-            return;
-        }
-    }
-
-    // Condición 3: Usuario vs. Pozo
-    if (totalOppositeAmount >= bet.amount) {
-        let selectedBets = [];
-        let accumulatedAmount = 0;
-
-        for (const oppositeBet of oppositeBets) {
-            selectedBets.push(oppositeBet);
-            accumulatedAmount += oppositeBet.amount;
-
-            if (accumulatedAmount >= bet.amount) {
-                break;
-            }
-        }
-
-        if (accumulatedAmount >= bet.amount) {
-            await updateBetStatus([bet, ...selectedBets], 1); // Marcar apuestas como aceptadas
-
-            // Emitir la información de las apuestas aceptadas
-            io.emit('Statusbetting', {
-                status: 'accepted',
-                bets: [bet, ...selectedBets],
-                message: 'Apuesta aceptada contra el pozo total.'
-            });
-
-            return;
-        }
-    }
+    
 
     // Si ninguna condición se cumple, ajustar las apuestas para mantener el balance
     const difference = totalOppositeAmount - totalTeamAmount;
@@ -313,11 +266,11 @@ const evaluateBetsRound = async (round,io) => {
     */
 
     // Emitir la información de la apuesta rechazada
-    io.emit('Statusbetting', {
+    /* io.emit('Statusbetting', {
         status: 'rejected',
         bet,
         message: 'La apuesta fue rechazada porque no cumplió ninguna condición.'
-    });
+    }); */
 };
 
 
