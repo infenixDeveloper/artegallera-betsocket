@@ -186,20 +186,20 @@ const evaluateBetsRound = async (round, bet, io) => {
     const totalOppositeAmount = oppositeBets.reduce((sum, bet) => sum + bet.amount, 0);
 
     // Verificar si la apuesta desnivela aún más los pozos
-    if (totalTeamAmount > totalOppositeAmount && (totalTeamAmount + bet.amount) > totalOppositeAmount) {
-        // Rechazar la apuesta
-        await updateBetStatus([bet], 2); // Rechazada
-        await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
+    // if (totalTeamAmount > totalOppositeAmount && (totalTeamAmount + bet.amount) > totalOppositeAmount) {
+    //     // Rechazar la apuesta
+    //     await updateBetStatus([bet], 2); // Rechazada
+    //     await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
 
-        // Emitir la información de la apuesta rechazada
-        io.emit('Statusbetting', {
-            status: 'rejected',
-            bet,
-            message: 'La apuesta fue rechazada porque desbalancea el pozo total.'
-        });
+    //     // Emitir la información de la apuesta rechazada
+    //     io.emit('Statusbetting', {
+    //         status: 'rejected',
+    //         bet,
+    //         message: 'La apuesta fue rechazada porque desbalancea el pozo total.'
+    //     });
 
-        return;
-    }
+    //     return;
+    // }
 
     // Condición 1: Usuario vs. Usuario
     const exactMatch = oppositeBets.find(oppositeBet => oppositeBet.amount === bet.amount && oppositeBet.status === 0);
