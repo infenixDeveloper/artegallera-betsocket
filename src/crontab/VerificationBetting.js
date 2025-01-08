@@ -138,14 +138,7 @@ const evaluateBets = async (round, bet, io) => {
 
 const processBetsRound = async (round, io) => {
     console.log(`Procesando apuestas para la ronda ID: ${round.id}`);
-    const bets = await betting.findAll({ where: { id_round: round.id, status: 0 } });
-
-    // Ordenar las apuestas por monto (descendente) para priorizar apuestas grandes
-    const sortedBets = bets.sort((a, b) => b.amount - a.amount);
-
-    for (const bet of sortedBets) {
-        await evaluateBetsRound(round, bet, io);
-    }
+    await evaluateBetsRound(round, io);
 };
 
 const processRoundBets = async (round, io) => {
@@ -160,36 +153,61 @@ const processRoundBets = async (round, io) => {
     }
 };
 
-const evaluateBetsRound = async (round, bet, io) => {
+const evaluateBetsRound = async (round, io) => {
 
-    const oppositeTeam = bet.team === 'red' ? 'green' : 'red';
 
-    // Obtener todas las apuestas de ambos equipos (estatus 0 y 1)
-    const teamBets = await betting.findAll({
+    const teamBetsRed = await betting.findAll({
         where: {
             id_round: round.id,
-            team: bet.team,
+            team: 'red',
             status: [0, 1] // Apuestas del equipo actual
         }
     });
 
-    const oppositeBets = await betting.findAll({
+    const teamBetsGreen = await betting.findAll({
         where: {
             id_round: round.id,
-            team: oppositeTeam,
-            status: [0, 1] // Apuestas del equipo contrario
+            team: 'green',
+            status: [0, 1] // Apuestas del equipo actual
         }
     });
 
     // Calcular el monto total de los pozos de ambos equipos
-    const totalTeamAmount = teamBets.reduce((sum, bet) => sum + bet.amount, 0);
-    const totalOppositeAmount = oppositeBets.reduce((sum, bet) => sum + bet.amount, 0);
+    const totalAmountRed = teamBetsRed.reduce((sum, bet) => sum + bet.amount, 0);
+    const totalAmountGreen = teamBetsGreen.reduce((sum, bet) => sum + bet.amount, 0);
 
-    // Verificar si la apuesta desnivela aún más los pozos
-    // if (totalTeamAmount > totalOppositeAmount && (totalTeamAmount + bet.amount) > totalOppositeAmount) {
-    //     // Rechazar la apuesta
-    //     await updateBetStatus([bet], 2); // Rechazada
-    //     await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
+    if (totalAmountRed !== totalAmountGreen) {
+        for (const redBet of teamBetsRed) {
+            let matched = false;
+            for (const greenBet of teamBetsGreen) {
+                if (redBet.amount === greenBet.amount) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                await betting.update({ status: 2 }, { where: { id: redBet.id } });
+            }
+        }
+
+        for (const greenBet of teamBetsGreen) {
+            let matched = false;
+            for (const redBet of teamBetsRed) {
+                if (greenBet.amount === redBet.amount) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                await betting.update({ status: 2 }, { where: { id: greenBet.id } });
+            }
+        }
+
+    }
+    /*if (totalTeamAmount > totalOppositeAmount && (totalTeamAmount + bet.amount) > totalOppositeAmount) {
+        // Rechazar la apuesta
+        await updateBetStatus([bet], 2); // Rechazada
+        await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
 
     //     // Emitir la información de la apuesta rechazada
     //     io.emit('Statusbetting', {
@@ -198,9 +216,8 @@ const evaluateBetsRound = async (round, bet, io) => {
     //         message: 'La apuesta fue rechazada porque desbalancea el pozo total.'
     //     });
 
-    //     return;
-    // }
-
+        return;
+    } 
     // Condición 1: Usuario vs. Usuario
     const exactMatch = oppositeBets.find(oppositeBet => oppositeBet.amount === bet.amount && oppositeBet.status === 0);
     if (exactMatch) {
@@ -266,9 +283,34 @@ const evaluateBetsRound = async (round, bet, io) => {
         }
     }
 
+    // Si ninguna condición se cumple, ajustar las apuestas para mantener el balance
+    const difference = totalOppositeAmount - totalTeamAmount;
+    if (difference > 0) {
+        await updateUserBalance(bet.id_user, difference); // Devolver la diferencia al usuario
+        await updateBetStatus([bet], 1); // Marcar la apuesta como aceptada parcialmente
+
+        // Emitir la información de la apuesta ajustada
+        io.emit('Statusbetting', {
+            status: 'partially_accepted',
+            bet,
+            message: `Apuesta aceptada parcialmente. Se devolvieron ${difference} unidades al usuario.`
+        });
+    } else {
+        await updateBetStatus([bet], 2); // Rechazada
+        await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
+
+        // Emitir la información de la apuesta rechazada
+        io.emit('Statusbetting', {
+            status: 'rejected',
+            bet,
+            message: 'La apuesta fue rechazada porque no cumplió ninguna condición.'
+        });
+    }
+
     // Si ninguna condición se cumple, rechazar la apuesta
     await updateBetStatus([bet], 2); // Rechazada
     await updateUserBalance(bet.id_user, bet.amount); // Devolver dinero
+    */
 
     // Emitir la información de la apuesta rechazada
     io.emit('Statusbetting', {
