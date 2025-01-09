@@ -191,7 +191,7 @@ const evaluateBetsRound = async (round, io) => {
         where: {
             id_round: round.id,
             team: "red",
-            status: 0 // Apuestas aceptadas
+            status: 1 // Apuestas aceptadas
         }
     }) || 0;
 
@@ -200,7 +200,7 @@ const evaluateBetsRound = async (round, io) => {
         where: {
             id_round: round.id,
             team: "green",
-            status: 0 // Apuestas aceptadas
+            status: 1 // Apuestas aceptadas
         }
     }) || 0;
 
@@ -216,10 +216,10 @@ const evaluateBetsRound = async (round, io) => {
     const smallerTeamBets = smallerTeam === "red" ? redBets : greenBets;
     const largerTeamAmount = smallerTeam === "red" ? greenAmount : redAmount;
     const smallerTeamAmount = smallerTeam === "red" ? redAmount : greenAmount;
-    const largerTeamAmount1 = smallerTeam1 === "red" ? greenAmount1 : redAmount1;
+    const largerTeamAmount1 = smallerTeam === "red" ? greenAmount1 : redAmount1;
 
     // Calcular la diferencia entre los montos acumulados
-    let remainingAmount = largerTeamAmount;
+    let remainingAmount = largerTeamAmount1;
 
     // Evaluar apuestas en proceso del equipo con menor monto
     if (smallerTeamBets.length > 0) {
@@ -233,18 +233,21 @@ const evaluateBetsRound = async (round, io) => {
 
     if (remainingOppositeBets.length > 0) {
         for (const bet of remainingOppositeBets) {
-            console.log((remainingAmount - largerTeamAmount1 + bet.amount) < smallerTeamAmount);
+            console.log(remainingAmount, largerTeamAmount1, bet.amount);
 
-            if ((remainingAmount - largerTeamAmount1 + bet.amount) < smallerTeamAmount) {
+            if ((largerTeamAmount1 + bet.amount) < smallerTeamAmount) {
                 await updateBetStatus([bet], 1); // Aceptar apuesta
             } else {
-                remainingAmount -= smallerTeamAmount;
+                remainingAmount = (remainingAmount + bet.amount) - smallerTeamAmount;
 
-                const difference = bet.amount - remainingAmount;
+                const difference = bet.amount > remainingAmount ? bet.amount - remainingAmount : remainingAmount - bet.amount;
+                console.log("---", remainingAmount, difference);
 
                 if (difference === 0) {
                     await updateBetStatus([bet], 1); // Aceptar apuesta completamente
                 } else if (difference > 0) {
+                    console.log(difference, remainingAmount);
+
                     await betting.update({ amount: difference, status: 1 }, { where: { id: bet.id } });
                     await updateUserBalance(bet.id_user, remainingAmount); // Devolver la diferencia
                     io.emit('Statusbetting', {
