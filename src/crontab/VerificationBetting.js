@@ -235,13 +235,13 @@ const evaluateBetsRound = async (round, io) => {
         for (const bet of remainingOppositeBets) {
             console.log(remainingAmount, largerTeamAmount1, bet.amount);
 
-            if (largerTeamAmount1 === smallerTeamAmount) {
+            if (remainingAmount === smallerTeamAmount) {
                 break;
             }
 
-            if ((largerTeamAmount1 + bet.amount) < smallerTeamAmount) {
+            if ((remainingAmount + bet.amount) < smallerTeamAmount) {
                 await updateBetStatus([bet], 1); // Aceptar apuesta
-                largerTeamAmount1 += bet.amount
+                remainingAmount += bet.amount
             } else {
                 remainingAmount = (remainingAmount + bet.amount) - smallerTeamAmount;
 
