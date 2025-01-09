@@ -213,10 +213,10 @@ const evaluateBetsRound = async (round, io) => {
     const largerTeam = redAmount > greenAmount ? "red" : "green";
     const smallerTeam1 = redAmount1 < greenAmount1 ? "red" : "green";
 
-    const smallerTeamBets = smallerTeam === "red" ? redBets : greenBets;
-    const largerTeamAmount = smallerTeam === "red" ? greenAmount : redAmount;
-    const smallerTeamAmount = smallerTeam === "red" ? redAmount : greenAmount;
-    const largerTeamAmount1 = smallerTeam === "red" ? greenAmount1 : redAmount1;
+    let smallerTeamBets = smallerTeam === "red" ? redBets : greenBets;
+    let largerTeamAmount = smallerTeam === "red" ? greenAmount : redAmount;
+    let smallerTeamAmount = smallerTeam === "red" ? redAmount : greenAmount;
+    let largerTeamAmount1 = smallerTeam === "red" ? greenAmount1 : redAmount1;
 
     // Calcular la diferencia entre los montos acumulados
     let remainingAmount = largerTeamAmount1;
