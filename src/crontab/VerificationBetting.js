@@ -416,8 +416,47 @@ const evaluateBetsRound = async (round, io) => {
                 } else if (difference > 0) {
                     console.log(difference, remainingAmount);
 
-                    await betting.update({ amount: difference, status: 1 }, { where: { id: bet.id } });
-                    await updateUserBalance(bet.id_user, remainingAmount); // Devolver la diferencia
+                    //busca una apuesta que tenga el monto igual al que falta
+                    const matchingBet = await betting.findOne({
+                        where: {
+                            id_round: round.id,
+                            team: largerTeam,
+                            amount: difference,
+                            status: [0,1],
+                        }
+                    });
+
+                    if (matchingBet) {
+                        await updateBetStatus([bet, matchingBet], 2); // Aceptar ambas apuestas
+                    }else{
+                        const bettingLargerTeam= await betting.findAll({
+                            where: {
+                                id_round: round.id,
+                                team: largerTeam,
+                                status: 1,
+                            }
+                        })
+                        let aux = 0;
+                        let auxId = [];
+                        for(const bets1 of bettingLargerTeam){
+                            if(aux < difference){
+                                if(bets1.amount < difference){
+                                    aux += bets1.amount;
+                                    auxId.push(bets1);
+                                }
+                            }else if(aux === difference){
+                                for(const bt of auxId){
+                                    await updateBetStatus([bt], 2); // Aceptar ambas apuestas
+                                }
+                                break;
+                            }else{
+                                await updateBetStatus([bet], 2);
+                            }
+                        }
+                    }
+
+                    //await betting.update({ amount: difference, status: 1 }, { where: { id: bet.id } });
+                    //await updateUserBalance(bet.id_user, remainingAmount); // Devolver la diferencia
                     io.emit('Statusbetting', {
                         status: 'partially_accepted',
                         bet,
