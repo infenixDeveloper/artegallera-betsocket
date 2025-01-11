@@ -296,7 +296,7 @@ const updateUserBalance = async (user, amount) => {
 //         });
 //     }
 // };
-
+/*
 const evaluateBets = async (round, io) => {
     console.log(`Evaluando apuestas para la ronda ID: ${round.id}`);
 
@@ -389,6 +389,181 @@ const evaluateBets = async (round, io) => {
     }
 
     console.log(`Evaluación completa para la ronda ID: ${round.id}`);
+};*/
+const yocontraelmundo = async () => {
+    const smallerTeam = redBets.length < greenBets.length ? "red" : "green";
+    const largerTeam = greenBets.length > redBets.length ? "green" : "red";
+
+    const amountTotalLargerTeam = largerTeam === "green"
+        ? greenBets.reduce((total, bet) => total + bet.amount, 0)
+        : redBets.reduce((total, bet) => total + bet.amount, 0);
+
+    const amountTotalSmallerTeam = smallerTeam === "green"
+        ? greenBets.reduce((total, bet) => total + bet.amount, 0)
+        : redBets.reduce((total, bet) => total + bet.amount, 0);
+
+    console.log("smallerTeam:", smallerTeam);
+    console.log("largerTeam:", largerTeam);
+
+    console.log("amountTotalLargerTeam:", amountTotalLargerTeam);
+    console.log("amountTotalSmallerTeam:", amountTotalSmallerTeam);
+
+    if (team === "red") {
+
+        for (const betR of redBets) {
+
+        }
+    } else {
+        for (const betG of greenBets) {
+
+        }
+    }
+}
+
+// Función que genera todas las combinaciones de sumas de 2 o más elementos de un array
+function obtenerSumasCombinadasConIds(arr) {
+    const sumas = new Map(); // Usamos un Map para almacenar la suma y las IDs involucradas
+
+    for (let i = 1; i <= arr.length; i++) { // Combinaciones de 1 o más elementos
+        const generarCombinaciones = (start, combo, ids) => {
+            if (combo.length === i) {
+                const suma = combo.reduce((acc, val) => acc + val, 0);
+                sumas.set(suma, [...(sumas.get(suma) || []), ids]);
+                return;
+            }
+
+            for (let j = start; j < arr.length; j++) {
+                generarCombinaciones(j + 1, [...combo, arr[j].amount], [...ids, arr[j].id]);
+            }
+        };
+
+        generarCombinaciones(0, [], []);
+    }
+
+    return sumas;
+}
+
+function encontrarSumaComunConIds(array1, array2) {
+    const sumasArray1 = obtenerSumasCombinadasConIds(array1);
+    const sumasArray2 = obtenerSumasCombinadasConIds(array2);
+
+    let resultado = [];
+
+    // Buscar la suma común más alta y devolver los IDs combinados
+    for (const [suma, combinaciones1] of sumasArray1.entries()) {
+        if (sumasArray2.has(suma)) {
+            const combinaciones2 = sumasArray2.get(suma);
+            // Combinar las IDs de ambas combinaciones que logran la suma
+            combinaciones1.forEach(ids1 => {
+                combinaciones2.forEach(ids2 => {
+                    resultado = [...ids1, ...ids2];
+                });
+            });
+            break; // Nos quedamos con la primera coincidencia
+        }
+    }
+
+    return resultado;
+}
+
+const evaluateGroupBet = async (redBets, greenBets, io) => {
+    const redAmounts = redBets.map(bet => ({ amount: bet.amount, id: bet.id }));
+    const greenAmounts = greenBets.map(bet => ({ amount: bet.amount, id: bet.id }));
+
+    const resultado = encontrarSumaComunConIds(redAmounts, greenAmounts);
+
+    if (resultado.length > 0) {
+        for (const bet of resultado) {
+            await betting.update({ status: 1 }, { where: { id: bet } });
+        }
+    }
+};
+
+// Ejemplo de uso:
+// evaluateGroupBet(round, 500, 'green', io);
+
+
+
+const evaluateBetsAmountEquels = async (round, io) => {
+    console.log(`Evaluando apuestas para la ronda ID: ${round.id}`);
+
+    // Obtener todas las apuestas pendientes de ambos equipos
+    let redBets = await betting.findAll({
+        where: {
+            id_round: round.id,
+            team: 'red',
+            status: 0, // Solo pendientes
+        }
+    });
+
+    let greenBets = await betting.findAll({
+        where: {
+            id_round: round.id,
+            team: 'green',
+            status: 0, // Solo pendientes
+        }
+    });
+
+    // Extraer el id y amount de ambas apuestas
+    let redBetsArray = redBets.map(bet => ({ id: bet.id, amount: bet.amount }));
+    let greenBetsArray = greenBets.map(bet => ({ id: bet.id, amount: bet.amount }));
+
+    // Ordenar las apuestas por amount de mayor a menor
+    redBetsArray.sort((a, b) => b.amount - a.amount);
+    greenBetsArray.sort((a, b) => b.amount - a.amount);
+
+    // Recorrer las apuestas del equipo rojo y buscar en el equipo verde
+    for (const redBet of redBetsArray) {
+        const matchingBet = greenBetsArray.find(greenBet => greenBet.amount === redBet.amount);
+
+        if (matchingBet) {
+            console.log(`Se encontró una apuesta igual: Rojo ID ${redBet.id} (${redBet.amount}) <-> Verde ID ${matchingBet.id} (${matchingBet.amount})`);
+            await updateBetStatus([redBet], 1);
+            await updateBetStatus([matchingBet], 1);
+            // Si deseas eliminar la apuesta verde encontrada para evitar duplicados en futuras búsquedas:
+            greenBetsArray = greenBetsArray.filter(greenBet => greenBet.id !== matchingBet.id);
+        }
+    }
+
+    redBets = await betting.findAll({
+        where: {
+            id_round: round.id,
+            team: 'red',
+            status: 0, // Solo pendientes
+        }
+    });
+
+    greenBets = await betting.findAll({
+        where: {
+            id_round: round.id,
+            team: 'green',
+            status: 0, // Solo pendientes
+        }
+    });
+
+    if (redBets.length > 0 && greenBets.length > 0) {
+        await evaluateGroupBet(redBets, greenBets, io)
+
+        redBets = await betting.findAll({
+            where: {
+                id_round: round.id,
+                team: 'red',
+                status: 0, // Solo pendientes
+            }
+        });
+
+        greenBets = await betting.findAll({
+            where: {
+                id_round: round.id,
+                team: 'green',
+                status: 0, // Solo pendientes
+            }
+        });
+        if (redBets.length > 0 && greenBets.length > 0) {
+            await evaluateGroupBet(redBets, greenBets, io)
+        }
+    }
+
 };
 
 const processBetsRound = async (round, io) => {
@@ -415,6 +590,9 @@ const processBetsRound = async (round, io) => {
 // };
 
 const evaluateBetsRound = async (round, io) => {
+
+    await evaluateBetsAmountEquels(round, io);
+
     // Obtener todas las apuestas de la ronda actual con status 0 (en proceso)
     const teamBets = await betting.findAll({
         where: {
@@ -428,159 +606,24 @@ const evaluateBetsRound = async (round, io) => {
         where: {
             id_round: round.id,
             team: "red",
-            status: [0, 1] // Apuestas aceptadas
+            status: [1] // Apuestas aceptadas
         }
     }) || 0;
-
-    // Obtener el monto acumulado para el equipo GREEN con status 1 (ya aceptadas)
     let greenAmount = await betting.sum("amount", {
         where: {
             id_round: round.id,
             team: "green",
-            status: [0, 1] // Apuestas aceptadas
+            status: [1] // Apuestas aceptadas
         }
     }) || 0;
 
-    let redAmount1 = await betting.sum("amount", {
-        where: {
-            id_round: round.id,
-            team: "red",
-            status: 1 // Apuestas aceptadas
-        }
-    }) || 0;
 
-    // Obtener el monto acumulado para el equipo GREEN con status 0 (ya aceptadas)
-    let greenAmount1 = await betting.sum("amount", {
-        where: {
-            id_round: round.id,
-            team: "green",
-            status: 1 // Apuestas aceptadas
-        }
-    }) || 0;
-
-    // Calcular las apuestas en proceso (status: 0) por equipo
-    const redBets = teamBets.sort((a, b) => a.amount - b.amount).filter(bet => bet.team === "red");
-    const greenBets = teamBets.sort((a, b) => a.amount - b.amount).filter(bet => bet.team === "green");
-
-    // Determinar cuál es el equipo con menor monto acumulado
-    const smallerTeam = redAmount < greenAmount ? "red" : "green";
-    const largerTeam = redAmount > greenAmount ? "red" : "green";
-    const smallerTeam1 = redAmount1 < greenAmount1 ? "red" : "green";
-
-    let smallerTeamBets = smallerTeam === "red" ? redBets : greenBets;
-    let largerTeamAmount = smallerTeam === "red" ? greenAmount : redAmount;
-    let smallerTeamAmount = smallerTeam === "red" ? redAmount : greenAmount;
-    let largerTeamAmount1 = smallerTeam === "red" ? greenAmount1 : redAmount1;
-
-    // Calcular la diferencia entre los montos acumulados
-    let remainingAmount = largerTeamAmount1;
-
-    // Evaluar apuestas en proceso del equipo con menor monto
-    if (smallerTeamBets.length > 0) {
-        for (const bet of smallerTeamBets) {
-            await updateBetStatus([bet], 1); // Marcar apuesta como aceptada
+    if (redAmount === greenAmount) {
+        for (const bet of teamBets) {
+            await updateBetStatus([bet], 2);
+            await updateUserBalance(bet.id_user, bet.amount);
         }
     }
-
-    // Evaluar apuestas en proceso del equipo contrario si hay monto restante
-    let remainingOppositeBets = smallerTeam === "red" ? greenBets : redBets;
-
-    if (remainingOppositeBets.length > 0) {
-        for (const bet of remainingOppositeBets) {
-            if (remainingAmount === smallerTeamAmount) {
-                break;
-            }
-
-            if ((remainingAmount + bet.amount) < smallerTeamAmount) {
-                await updateBetStatus([bet], 1); // Aceptar apuesta
-                remainingAmount += bet.amount
-            } else {
-                remainingAmount = (remainingAmount + bet.amount) - smallerTeamAmount;
-
-                const difference = bet.amount > remainingAmount ? bet.amount - remainingAmount : remainingAmount - bet.amount;
-                console.log("---", remainingAmount, difference);
-
-                if (difference === 0) {
-                    await updateBetStatus([bet], 1); // Aceptar apuesta completamente
-                } else if (difference > 0) {
-                    //busca una apuesta que tenga el monto igual al que falta
-                    const matchingBet = await betting.findOne({
-                        where: {
-                            id_round: round.id,
-                            team: largerTeam,
-                            amount: remainingAmount,
-                            status: [0, 1],
-                        }
-                    });
-
-                    if (matchingBet) {
-                        await updateBetStatus([matchingBet], 2);
-                        await updateUserBalance(matchingBet.id_user, matchingBet.amount);
-                    } else {
-                        const bettingLargerTeam = await betting.findAll({
-                            where: {
-                                id_round: round.id,
-                                team: largerTeam,
-                                status: 1,
-                            }
-                        })
-                        let aux = 0;
-                        let auxId = [];
-                        for (const bets1 of bettingLargerTeam) {
-                            if (aux < difference) {
-                                if (bets1.amount < remainingAmount) {
-                                    aux += bets1.amount;
-                                    auxId.push(bets1);
-                                }
-                            } else if (aux === remainingAmount) {
-                                for (const bt of auxId) {
-                                    await updateBetStatus([bt], 2); // Aceptar ambas apuestas
-                                }
-                                break;
-                            } else {
-                                await updateBetStatus([bet], 1);
-                            }
-                        }
-                    }
-
-                    //await betting.update({ amount: difference, status: 1 }, { where: { id: bet.id } });
-                    //await updateUserBalance(bet.id_user, remainingAmount); // Devolver la diferencia
-                    io.emit('Statusbetting', {
-                        status: 'partially_accepted',
-                        bet,
-                        acceptedAmount: remainingAmount,
-                        returnedAmount: difference,
-                        message: 'Apuesta parcialmente aceptada para igualar el pozo contrario.'
-                    });
-                }
-
-                remainingAmount = 0;
-                break;
-            }
-        }
-    } else {
-        // No hay apuestas en proceso para el equipo contrario
-        console.log(`No hay apuestas pendientes para el equipo contrario (${smallerTeam === "red" ? "green" : "red"})`);
-    }
-
-    // Rechazar apuestas no procesadas
-    const remainingUnprocessedBets = await betting.findAll({
-        where: {
-            id_round: round.id,
-            status: 0 // Apuestas pendientes
-        }
-    });
-
-    for (const remainingBet of remainingUnprocessedBets) {
-        await updateBetStatus([remainingBet], 2); // Rechazar apuesta
-        // await updateUserBalance(remainingBet.id_user, remainingBet.amount); // Devolver dinero
-    }
-
-    // Emitir evento al finalizar el procesamiento
-    io.emit('Statusbetting', {
-        status: 'processed',
-        message: `Apuestas del equipo ${smallerTeam} procesadas y aceptadas hasta igualar el monto del equipo ${largerTeam}.`
-    });
 };
 
 exports.VerificationBetting = async (io) => {
@@ -602,7 +645,7 @@ exports.VerificationBetting = async (io) => {
         }
 
         for (const round of activeRounds) {
-            await evaluateBets(round, io);
+            await evaluateBetsAmountEquels(round, io)
         }
     } catch (error) {
         console.error('Error in VerificationBetting:', error);
