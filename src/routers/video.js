@@ -1,9 +1,9 @@
 const { Router } = require("express");
 const router = Router();
-const { uploadVideo, getPromotions } = require("../controllers/videoController");
+const { uploadVideo, getAllVideos } = require("../controllers/videoController");
 
 
+router.get("/", getAllVideos);
 router.post("/upload", uploadVideo);
-router.get("/promotions", getPromotions);
 
 module.exports = router;

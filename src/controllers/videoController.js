@@ -63,7 +63,7 @@ const uploadVideo = (req, res) => {
   });
 };
 
-const getPromotions = async (req, res) => {
+const getAllVideos = async (req, res) => {
   let result = {};
   try {
     const promotionsList = await promotions.findAll();
@@ -72,7 +72,6 @@ const getPromotions = async (req, res) => {
       result = {
         success: true,
         promotions: promotionsList,
-        message: "Promotions list"
       };
     }
     return res.json(result);
@@ -88,4 +87,4 @@ const getPromotions = async (req, res) => {
 
 };
 
-module.exports = { uploadVideo, getPromotions };
+module.exports = { uploadVideo, getAllVideos };
