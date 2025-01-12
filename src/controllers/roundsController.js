@@ -25,29 +25,31 @@ async function GetRoundByEventId(req, res) {
     let result = {}
     try {
         const { id } = req.params
+        if (id) {
+            const allRounds = await rounds.findAll({
+                where: { id_event: id },
+                include: [
+                    {
+                        model: winners,
+                        as: 'winners',
+                    },
+                ]
+            },)
 
-        const allRounds = await rounds.findAll({
-            where: { id_event: id },
-            include: [
-                {
-                    model: winners,
-                    as: 'winners',
-                },
-            ]
-        },)
-
-        if (allRounds) {
-            result = {
-                success: true,
-                message: 'Rondas encontradas',
-                data: allRounds
-            };
-        } else {
-            result = {
-                success: false,
-                message: 'Rondas no encontradas'
-            };
+            if (allRounds) {
+                result = {
+                    success: true,
+                    message: 'Rondas encontradas',
+                    data: allRounds
+                };
+            } else {
+                result = {
+                    success: false,
+                    message: 'Rondas no encontradas'
+                };
+            }
         }
+
     } catch (error) {
         result = {
             success: false,

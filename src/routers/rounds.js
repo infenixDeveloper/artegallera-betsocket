@@ -4,8 +4,8 @@ const { GetAll, GetId, Create, Update, Delete, GetRoundByEventId } = require("..
 const { validateToken } = require("../middlewares/validateToken.js");
 
 router.get("/", validateToken, GetAll)
-router.get("/:id", validateToken, GetId)
 router.get("/event/:id", validateToken, GetRoundByEventId)
+router.get("/:id", validateToken, GetId)
 router.post("/create", validateToken, Create);
 router.post("/update/:id", validateToken, Update);
 router.post("/delete/:id", validateToken, Delete);
