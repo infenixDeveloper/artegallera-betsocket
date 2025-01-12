@@ -145,9 +145,12 @@ module.exports = (io) => {
     })
 
     socket.on("getAllActiveRounds", async ({ id_event }, callback) => {
+      console.log(id_event);
+
       try {
         if (id_event) {
           const activeRounds = await rounds.findAll({ where: { id_event, is_betting_active: true } });
+          console.log(activeRounds);
 
           if (activeRounds) {
             callback({
@@ -204,12 +207,11 @@ module.exports = (io) => {
           callback({ success: false, message: "Error al obtener getRoundStatus" });
         } else {
           const event = await events.findOne({ where: { id: id_event } });
-          if (event) {
-            const round = await rounds.findByPk(id);
-            callback({ success: true, data: { event, round } });
-          } else {
-            callback({ success: false, message: "Evento no encontrado" });
-          }
+
+          const round = await rounds.findAll({ where: { id_event } });
+          callback({ success: true, data: { event, round } });
+
+
         }
       } catch (error) {
         console.error("Error al obtener estado del evento:", error);

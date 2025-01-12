@@ -184,11 +184,7 @@ const processBetsRound = async (round, io) => {
     console.log(`Procesando apuestas para la ronda ID: ${round.id}`);
     const bets = await betting.findAll({ where: { id_round: round.id, status: 0 } });
 
-    // Ordenar las apuestas por monto (descendente) para priorizar apuestas grandes
-    // const sortedBets = bets.sort((a, b) => b.amount - a.amount);
-
     await evaluateBetsRound(round, io);
-
 };
 
 // const processRoundBets = async (round, io) => {
@@ -236,6 +232,13 @@ const evaluateBetsRound = async (round, io) => {
         for (const bet of teamBets) {
             await updateBetStatus([bet], 2);
             await updateUserBalance(bet.id_user, bet.amount);
+
+            io.emit("Statusbetting", {
+                status: "rejected",
+                redBet: bet,
+                greenBet: bet,
+                message: `Su apuesta de $${bet.amount} fue declinada`
+            });
         }
     }
 };
