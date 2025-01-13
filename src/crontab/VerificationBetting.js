@@ -285,9 +285,9 @@ exports.VerificationBettingRound = async (io) => {
             return;
         }
 
-        for (const round of activeRounds) {
-            await processBetsRound(round, io);
-        }
+
+        await processBetsRound(activeRounds[0], io);
+
     } catch (error) {
         console.error('Error in VerificationBetting:', error);
     }
