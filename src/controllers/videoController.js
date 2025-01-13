@@ -7,7 +7,7 @@ const { promotions } = require('../db');
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     // Directorio de destino para los archivos
-    cb(null, "E:/Proyectos/Alex/arteGallera-landing/public/uploads");
+    cb(null, "/var/www/html/uploads");
   },
   filename: (req, file, cb) => {
     // Nombre único para cada archivo
