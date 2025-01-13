@@ -261,9 +261,7 @@ exports.VerificationBetting = async (io) => {
             return;
         }
 
-        for (const round of activeRounds) {
-            await evaluateBetsAmountEquels(round, io)
-        }
+        await evaluateBetsAmountEquels(activeRounds[0], io)
     } catch (error) {
         console.error('Error in VerificationBetting:', error);
     }
