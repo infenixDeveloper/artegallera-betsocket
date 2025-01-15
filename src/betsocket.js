@@ -145,12 +145,9 @@ module.exports = (io) => {
     })
 
     socket.on("getAllActiveRounds", async ({ id_event }, callback) => {
-      console.log(id_event);
-
       try {
         if (id_event) {
           const activeRounds = await rounds.findAll({ where: { id_event, is_betting_active: true } });
-          console.log(activeRounds);
 
           if (activeRounds) {
             callback({

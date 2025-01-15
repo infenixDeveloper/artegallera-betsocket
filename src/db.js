@@ -31,6 +31,7 @@ if (config.use_env_variable) {
 
 sequelize.models = initModels.initModels(sequelize);
 module.exports = {
+  sequelize,
   ...sequelize.models,
   conn: sequelize,
 };
