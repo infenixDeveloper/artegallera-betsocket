@@ -174,7 +174,7 @@ module.exports = (io) => {
               id: id_round,
             },
           });
-          await VerificationBettingRound(io);
+
           if (round) {
             await round.update({ is_betting_active: isOpen });
             io.emit("isBettingActive", { success: true, data: round, message: isOpen ? "Ronda Activo" : "Ronda Inactivo" });
@@ -184,6 +184,11 @@ module.exports = (io) => {
             if (activeRounds) {
               io.emit("getActiveRounds", { success: true, data: activeRounds, message: "Rondas activas encontradas con éxito" })
             }
+
+            if (isOpen === false) {
+              await VerificationBettingRound(round.id, io);
+            }
+
           }
         } else {
           callback({ success: false, message: "Evento no encontrado" });
@@ -403,4 +408,3 @@ module.exports = (io) => {
     });
   });
 };
-

@@ -10,21 +10,25 @@ const updateBetStatusBulk = async (betIds, status, transaction) => {
     }
 };
 
-const updateBalances = async (bets, transaction) => {
+const updateBalances = async (bets, io, transaction) => {
     try {
-        const updates = bets.map(async (bet) => {
+        for (const bet of bets) {
             const user = await users.findOne({ where: { id: bet.id_user }, transaction });
             const newBalance = user.initial_balance + bet.amount;
+
             await users.update({ initial_balance: newBalance }, { where: { id: bet.id_user }, transaction });
-        });
-        await Promise.all(updates);
+            console.log("Nuevo Saldo: ", newBalance);
+            await updateBetStatusBulk([bet.id], 2, transaction);
+            io.emit('Statusbetting', { status: "rejected", redBet: bet.team === "red" ? bet : {}, greenBet: bet.team === "green" ? bet : {}, message: `Su apuesta de $${bet.amount.toLocaleString('en-US')} fue declinada` });
+        }
+
     } catch (error) {
         console.error(`Error al actualizar balances de usuarios:`, error);
         throw error;
     }
 };
 
-const processMatchingBets = async (redBets, greenBets, transaction) => {
+const processMatchingBets = async (redBets, greenBets, io, transaction) => {
     const matchedRedBets = [];
     const matchedGreenBets = [];
 
@@ -35,6 +39,7 @@ const processMatchingBets = async (redBets, greenBets, transaction) => {
             matchedRedBets.push(redBet.id);
             matchedGreenBets.push(matchingBet.id);
             greenBets = greenBets.filter(greenBet => greenBet.id !== matchingBet.id);
+            io.emit('Statusbetting', { status: "accepted", redBet, greenBet: matchingBet, message: `Su apuesta de $${redBet.amount.toLocaleString('en-US')} se realizo con éxito` });
         }
     }
 
@@ -42,10 +47,8 @@ const processMatchingBets = async (redBets, greenBets, transaction) => {
     await updateBetStatusBulk(matchedGreenBets, 1, transaction);
 };
 
-const evaluateBetsAmountEquels = async (round, io) => {
+const evaluateBetsAmountEquels = async (round, io, transaction) => {
     console.log(`Evaluando apuestas para la ronda ID: ${round.id}`);
-
-    const transaction = await sequelize.transaction();
     try {
         const redBets = await betting.findAll({
             where: { id_round: round.id, team: 'red', status: 0 },
@@ -58,30 +61,50 @@ const evaluateBetsAmountEquels = async (round, io) => {
         });
 
         if (redBets.length && greenBets.length) {
-            await processMatchingBets(redBets, greenBets, transaction);
+            await processMatchingBets(redBets, greenBets, io, transaction);
         }
+    } catch (error) {
+        console.error(`Error evaluando apuestas para la ronda ID: ${round.id}`, error);
+        throw error; // Propaga el error para manejarlo en el nivel principal.
+    }
+};
 
-        const remainingBets = await betting.findAll({
-            where: { id_round: round.id, status: 0 },
+const matchHighestBet = async (highestBet, io, transaction) => {
+    console.log(highestBet.amount);
+
+    try {
+        const oppositeTeam = highestBet.team === 'red' ? 'green' : 'red';
+
+        const oppositeBets = await betting.findAll({
+            where: { id_round: highestBet.id_round, team: oppositeTeam, status: 0 },
             transaction
         });
 
-        for (let index = 0; index < remainingBets.length; index++) {
-            const highestAmount = await findHighestRemainingBet(round, transaction);
-            await matchHighestBet(highestAmount, transaction)
+        let remainingAmount = highestBet.amount;
+        const matchedBets = [];
+
+        for (const bet of oppositeBets) {
+            if (remainingAmount <= 0) break;
+
+            if (bet.amount <= remainingAmount) {
+                matchedBets.push(bet.id);
+                remainingAmount -= bet.amount;
+            }
         }
 
-        await transaction.commit();
-
-        io.emit("Statusbetting", {
-            status: "evaluated",
-            message: "Apuestas evaluadas con éxito."
-        });
+        if (remainingAmount === 0) {
+            await updateBetStatusBulk([highestBet.id], 1, transaction);
+            await updateBetStatusBulk(matchedBets, 1, transaction);
+        } else {
+            await updateBetStatusBulk([highestBet.id], 2, transaction);
+            await updateBalances([highestBet], io, transaction)
+        }
     } catch (error) {
-        console.error(`Error evaluando apuestas para la ronda ID: ${round.id}`, error);
-        await transaction.rollback();
+        console.error("Error en matchHighestBet:", error);
+        throw error; // Propaga el error.
     }
 };
+
 
 const findHighestRemainingBet = async (round, transaction) => {
     // Buscar las apuestas restantes con status 0
@@ -96,35 +119,6 @@ const findHighestRemainingBet = async (round, transaction) => {
     const highestBet = remainingBets.reduce((maxBet, bet) => bet.amount > maxBet.amount ? bet : maxBet, remainingBets[0]);
     return highestBet;
 };
-
-const matchHighestBet = async (highestBet, transaction) => {
-    const oppositeTeam = highestBet.team === 'red' ? 'green' : 'red';
-
-    const oppositeBets = await betting.findAll({
-        where: { id_round: highestBet.id_round, team: oppositeTeam, status: 0 },
-        transaction
-    });
-
-    let remainingAmount = highestBet.amount;
-    const matchedBets = [];
-
-    for (const bet of oppositeBets) {
-        if (remainingAmount <= 0) break;
-        console.log(bet.amount, "=", remainingAmount);
-
-        if (bet.amount <= remainingAmount) {
-            matchedBets.push(bet.id);
-            remainingAmount -= bet.amount;
-        }
-    }
-
-    if (remainingAmount === 0) {
-        await updateBetStatusBulk([highestBet.id], 1, transaction);
-        await updateBetStatusBulk(matchedBets, 1, transaction);
-    }
-};
-
-
 
 exports.VerificationBetting = async (io) => {
     try {
@@ -146,8 +140,80 @@ exports.VerificationBetting = async (io) => {
 
         for (const round of activeRounds) {
             await evaluateBetsAmountEquels(round, io);
+
         }
     } catch (error) {
         console.error("Error en la verificación de apuestas:", error);
+    }
+};
+
+exports.VerificationBettingRound = async (id_round, io) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const activeEvent = await events.findOne({ where: { is_active: true } });
+
+        if (!activeEvent) {
+            io.emit('Statusbetting', { status: "No hay eventos activos" });
+            console.log("No hay eventos activos");
+            await transaction.rollback();
+            return;
+        }
+
+        const activeRounds = await rounds.findAll({ where: { id_event: activeEvent.id, id: id_round } });
+
+        if (!activeRounds.length) {
+            io.emit('Statusbetting', { status: "No hay rondas activas" });
+            console.log("No hay rondas activas");
+            await transaction.rollback();
+            return;
+        }
+
+        let redBetsAmount = await betting.sum("amount", { where: { id_round, team: "red" } });
+        let greenBetsAmount = await betting.sum("amount", { where: { id_round, team: "green" } });
+
+        if (redBetsAmount === greenBetsAmount) {
+            let remainingBets = await betting.findAll({
+                where: { id_round, status: [0, 1] },
+                transaction
+            });
+
+            for (const bet of remainingBets) {
+                await updateBetStatusBulk([bet.id], 1, transaction);
+                io.emit('Statusbetting', { status: "accepted", redBet: bet, greenBet: bet, message: `Su apuesta de $${bet.amount.toLocaleString('en-US')} se realizo con éxito` });
+            }
+        }
+
+        for (const round of activeRounds) {
+
+            // Evaluar apuestas iguales
+            await evaluateBetsAmountEquels(round, io, transaction);
+
+            // Procesar las apuestas restantes
+            let remainingBets = await betting.findAll({
+                where: { id_round: round.id, status: 0 },
+                transaction
+            });
+
+            for (let index = 0; index < remainingBets.length; index++) {
+                const highestAmount = await findHighestRemainingBet(round, transaction);
+                if (highestAmount) {
+                    await matchHighestBet(highestAmount, io, transaction);
+                }
+            }
+
+            remainingBets = await betting.findAll({
+                where: { id_round: round.id, status: 0 },
+                transaction
+            });
+
+            await updateBalances(remainingBets, io, transaction)
+
+        }
+
+        await transaction.commit();
+        io.emit('Statusbetting', { status: "Verificación completada con éxito" });
+    } catch (error) {
+        console.error("Error en la verificación de apuestas:", error);
+        await transaction.rollback();
     }
 };
