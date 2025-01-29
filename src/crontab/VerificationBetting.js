@@ -172,6 +172,7 @@ exports.VerificationBettingRound = async (id_round, io) => {
         let greenBetsAmount = await betting.sum("amount", { where: { id_round, team: "green" } });
 
         if (redBetsAmount === greenBetsAmount) {
+
             let remainingBets = await betting.findAll({
                 where: { id_round, status: [0, 1] },
                 transaction
