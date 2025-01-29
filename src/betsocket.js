@@ -1,17 +1,20 @@
 const { betting, users, events, rounds, winners } = require("./db.js");
 const { VerificationBetting, VerificationBettingRound } = require("./crontab/VerificationBetting.js");
 
+let connectedUsers = 0;
+
 module.exports = (io) => {
   setInterval(async () => {
     await VerificationBetting(io);
   }, 20000);
 
   io.on("connection", (socket) => {
-    console.log("New connection to bets socket");
-
+    connectedUsers++;
+    console.log("New connection to bets socket. Connected users:", connectedUsers);
 
     socket.on("disconnect", () => {
-      console.log("User disconnected from bets socket");
+      connectedUsers--;
+      console.log("User disconnected from bets socket. Connected users:", connectedUsers);
     });
 
     socket.on('placeBet', async (data, callback) => {
@@ -406,6 +409,11 @@ module.exports = (io) => {
         console.error(error);
         callback({ success: false, message: "Error al actualizar el saldo." });
       }
+    });
+
+    // Evento para obtener el valor del contador de usuarios conectados
+    socket.on('getConnectedUsers', (callback) => {
+      callback({ connectedUsers });
     });
 
     socket.on("user-amount", async ({ id_user, id_round }, callback) => {
