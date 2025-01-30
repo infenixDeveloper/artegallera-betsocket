@@ -1,4 +1,4 @@
-const { betting, events, rounds, users,marriedBetting, sequelize } = require('../db');
+const { betting, events, rounds, users, marriedbetting, sequelize } = require('../db');
 
 const updateBetStatusBulk = async (betIds, status, transaction) => {
     try {
@@ -40,7 +40,7 @@ const processMatchingBets = async (redBets, greenBets, io, transaction) => {
             matchedGreenBets.push(matchingBet.id);
             greenBets = greenBets.filter(greenBet => greenBet.id !== matchingBet.id);
             io.emit('Statusbetting', { status: "accepted", redBet, greenBet: matchingBet, message: `Su apuesta de $${redBet.amount.toLocaleString('en-US')} se realizo con éxito` });
-            marriedBetting.create({id_betting_one: redBet.id, id_betting_two: matchingBet.id, id_event: redBet.id_event, id_round: redBet.id_round}, {transaction});
+            await marriedBetting.create({ id_betting_one: redBet.id, id_betting_two: matchingBet.id, id_event: redBet.id_event, id_round: redBet.id_round }, { transaction });
         }
     }
 
@@ -97,7 +97,7 @@ const matchHighestBet = async (highestBet, io, transaction) => {
             await updateBetStatusBulk([highestBet.id], 1, transaction);
             await updateBetStatusBulk(matchedBets, 1, transaction);
             for (const bet of matchedBets) {
-                marriedBetting.create({id_betting_one: highestBet.id, id_betting_two: bet, id_event: highestBet.id_event, id_round: highestBet.id_round}, {transaction});
+                await marriedbetting.create({ id_betting_one: highestBet.id, id_betting_two: bet, id_event: highestBet.id_event, id_round: highestBet.id_round }, { transaction });
             }
         } else {
             await updateBetStatusBulk([highestBet.id], 2, transaction);
