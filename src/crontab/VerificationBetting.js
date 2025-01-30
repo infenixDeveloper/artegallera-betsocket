@@ -1,4 +1,4 @@
-const { betting, events, rounds, users,marriedBetting, sequelize } = require('../db');
+const { betting, events, rounds, users,marriedbetting, sequelize } = require('../db');
 
 const updateBetStatusBulk = async (betIds, status, transaction) => {
     try {
@@ -12,14 +12,15 @@ const updateBetStatusBulk = async (betIds, status, transaction) => {
 
 const updateBalances = async (bets, io, transaction) => {
     try {
+        let amountTotal= 0; 
         for (const bet of bets) {
             const user = await users.findOne({ where: { id: bet.id_user }, transaction });
             const newBalance = user.initial_balance + bet.amount;
 
             await users.update({ initial_balance: newBalance }, { where: { id: bet.id_user }, transaction });
-            console.log("Nuevo Saldo: ", newBalance);
+            amountTotal += bet.amount;
             await updateBetStatusBulk([bet.id], 2, transaction);
-            io.emit('Statusbetting', { status: "rejected", redBet: bet.team === "red" ? bet : {}, greenBet: bet.team === "green" ? bet : {}, message: `Su apuesta de $${bet.amount.toLocaleString('en-US')} fue declinada` });
+            io.emit('Statusbetting', { status: "rejected", redBet: bet.team === "red" ? bet : {}, greenBet: bet.team === "green" ? bet : {}, message: `Su apuesta de $${amountTotal.toLocaleString('en-US')} fue declinada` });
         }
 
     } catch (error) {
@@ -40,7 +41,7 @@ const processMatchingBets = async (redBets, greenBets, io, transaction) => {
             matchedGreenBets.push(matchingBet.id);
             greenBets = greenBets.filter(greenBet => greenBet.id !== matchingBet.id);
             io.emit('Statusbetting', { status: "accepted", redBet, greenBet: matchingBet, message: `Su apuesta de $${redBet.amount.toLocaleString('en-US')} se realizo con éxito` });
-            marriedBetting.create({id_betting_one: redBet.id, id_betting_two: matchingBet.id, id_event: redBet.id_event, id_round: redBet.id_round}, {transaction});
+            await marriedbetting.create({id_betting_one: redBet.id, id_betting_two: matchingBet.id, id_event: redBet.id_event, id_round: redBet.id_round}, {transaction});
         }
     }
 
@@ -97,7 +98,7 @@ const matchHighestBet = async (highestBet, io, transaction) => {
             await updateBetStatusBulk([highestBet.id], 1, transaction);
             await updateBetStatusBulk(matchedBets, 1, transaction);
             for (const bet of matchedBets) {
-                marriedBetting.create({id_betting_one: highestBet.id, id_betting_two: bet, id_event: highestBet.id_event, id_round: highestBet.id_round}, {transaction});
+                await marriedbetting.create({id_betting_one: highestBet.id, id_betting_two: bet, id_event: highestBet.id_event, id_round: highestBet.id_round}, {transaction});
             }
         } else {
             await updateBetStatusBulk([highestBet.id], 2, transaction);
@@ -144,14 +145,14 @@ exports.VerificationBetting = async (io) => {
 
         for (const round of activeRounds) {
             await evaluateBetsAmountEquels(round, io);
-
+            await VerificationBettingRound(round.id, io);
         }
     } catch (error) {
         console.error("Error en la verificación de apuestas:", error);
     }
 };
 
-exports.VerificationBettingRound = async (id_round, io) => {
+const VerificationBettingRound = async (id_round, io) => {
     const transaction = await sequelize.transaction();
     try {
         const activeEvent = await events.findOne({ where: { is_active: true } });
@@ -222,3 +223,5 @@ exports.VerificationBettingRound = async (id_round, io) => {
         await transaction.rollback();
     }
 };
+
+exports.VerificationBettingRound = VerificationBettingRound;
