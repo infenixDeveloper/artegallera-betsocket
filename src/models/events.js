@@ -55,6 +55,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.BOOLEAN
     },
+    total_amount: {
+      allowNull: false,
+      type: DataTypes.DOUBLE
+    }
   }, {
     sequelize,
     modelName: 'events',
