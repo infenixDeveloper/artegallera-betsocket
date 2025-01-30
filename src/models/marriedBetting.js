@@ -20,11 +20,11 @@ module.exports = (sequelize, DataTypes) => {
       });
       this.belongsTo(models.betting, {
         foreignKey: 'id_betting_one',
-        targetKey: 'id'
+        as: 'bettingOne' // Se define un alias único
       });
       this.belongsTo(models.betting, {
         foreignKey: 'id_betting_two',
-        targetKey: 'id'
+        as: 'bettingTwo' // Se define un alias único
       });
     }
   }

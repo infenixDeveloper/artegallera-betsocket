@@ -22,6 +22,15 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'id_winner',
         as: 'winner'
       });
+      models.betting.hasOne(models.marriedbetting, {
+        foreignKey: 'id_betting_one',
+        as: 'bettingOne'
+      });
+
+      models.betting.hasOne(models.marriedbetting, {
+        foreignKey: 'id_betting_two',
+        as: 'bettingTwo'
+      });
     }
   }
   betting.init({
