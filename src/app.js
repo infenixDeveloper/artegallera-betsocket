@@ -4,16 +4,16 @@ const bodyParser = require("body-parser");
 const morgan = require("morgan");
 const helmet = require("helmet");
 const { logger } = require("./utils/logger.js");
+const cors = require("cors");
 const env = process.env;
-
 const server = express();
 
 var http = require("http").Server(server);
 var io = require("socket.io")(http, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        origin: '*',
+        methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+        allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
         credentials: true
     }
 });
@@ -28,20 +28,19 @@ if (env.NODE_ENV === 'production') {
 
 server.use(helmet({ crossOriginEmbedderPolicy: false }));
 
+// Configuración de CORS
+server.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    credentials: true
+}));
+
 server.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 server.use(bodyParser.json({ limit: "50mb" }));
-server.use(express.json());
+
+// Elimina el uso redundante de express.json() ya que bodyParser.json() está configurado
 server.use(morgan(env.MODE));
-server.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    );
-    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-    next();
-});
 
 server.use((req, res, next) => {
     logger.info(`Received a ${req.method} request for ${req.url}`);
@@ -53,6 +52,10 @@ server.use((err, req, res, next) => {
     const message = err.message || err;
     logger.info(`Received a ${req.method} request for ${req.url}`);
     res.status(status).send(message);
+});
+
+http.listen(process.env.PORT || 3000, () => {
+    console.log(`Server is running on port ${process.env.PORT || 3000}`);
 });
 
 module.exports = http;
