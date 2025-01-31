@@ -418,7 +418,7 @@ module.exports = (io) => {
 
     socket.on("user-amount", async ({ id_user, id_round }, callback) => {
       try {
-        const bets = await betting.findAll({ where: { id_user, id_round, status: [0, 1] } });
+        const bets = await betting.findAll({ where: { id_user, id_round, status: 1 } });
 
         const totalRed = bets.filter((bet) => bet.team === "red").reduce((sum, bet) => sum + bet.amount, 0);
         const totalGreen = bets.filter((bet) => bet.team === "green").reduce((sum, bet) => sum + bet.amount, 0);
