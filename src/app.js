@@ -8,14 +8,17 @@ const cors = require("cors");
 const env = process.env;
 const server = express();
 
+var corsOptions = {
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    credentials: true
+};
+
+
 var http = require("http").Server(server);
 var io = require("socket.io")(http, {
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-        allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-        credentials: true
-    }
+    cors: corsOptions
 });
 
 require('./betsocket.js')(io);
@@ -29,12 +32,7 @@ if (env.NODE_ENV === 'production') {
 server.use(helmet({ crossOriginEmbedderPolicy: false }));
 
 // Configuración de CORS
-server.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-    credentials: true
-}));
+server.use(cors(corsOptions));
 
 server.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 server.use(bodyParser.json({ limit: "50mb" }));
@@ -53,9 +51,5 @@ server.use((err, req, res, next) => {
     logger.info(`Received a ${req.method} request for ${req.url}`);
     res.status(status).send(message);
 });
-
-// http.listen(process.env.PORT || 3000, () => {
-//     console.log(`Server is running on port ${process.env.PORT || 3000}`);
-// });
 
 module.exports = http;
