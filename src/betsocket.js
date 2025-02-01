@@ -213,7 +213,7 @@ module.exports = (io) => {
         } else {
           const event = await events.findOne({ where: { id: id_event } });
 
-          const round = await rounds.findAll({ where: { id_event } });
+          const round = await rounds.findAll({ where: { id, id_event } });
           callback({ success: true, data: { event, round } });
 
 
