@@ -170,13 +170,11 @@ const findHighestRemainingBet = async (round, transaction) => {
 };
 
 exports.VerificationBetting = async (io) => {
-    const transaction = await sequelize.transaction();
-
     const id_round = await rounds.findOne({ where: { is_betting_active: true } });
-
 
     try {
         if (id_round) {
+            const transaction = await sequelize.transaction();
             const activeEvent = await events.findOne({ where: { is_active: true } });
 
             if (!activeEvent) {
@@ -231,8 +229,8 @@ exports.VerificationBetting = async (io) => {
 };
 
 const VerificationBettingRound = async (id_round, io) => {
-    const transaction = await sequelize.transaction();
     try {
+        const transaction = await sequelize.transaction();
         const activeEvent = await events.findOne({ where: { is_active: true } });
 
         if (!activeEvent) {
@@ -270,7 +268,6 @@ const VerificationBettingRound = async (id_round, io) => {
         for (const round of activeRounds) {
 
             // Evaluar apuestas iguales
-            await evaluateBetsAmountEquels(round, io, transaction);
 
             // Procesar las apuestas restantes
             let remainingBets = await betting.findAll({
