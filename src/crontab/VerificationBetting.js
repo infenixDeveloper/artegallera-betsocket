@@ -77,7 +77,8 @@ const matchHighestBet = async (highestBet, io, transaction) => {
 
         const oppositeBets = await betting.findAll({
             where: { id_round: highestBet.id_round, team: oppositeTeam, status: 0 },
-            transaction
+            transaction,
+            order: [['amount', 'DESC']] // Ordena de mayor a menor
         });
 
         let remainingAmount = highestBet.amount;
@@ -118,7 +119,8 @@ const matchHighestBet2 = async (highestBet, io, transaction) => {
 
         const oppositeBets = await betting.findAll({
             where: { id_round: highestBet.id_round, team: oppositeTeam, status: 0 },
-            transaction
+            transaction,
+            order: [['amount', 'DESC']] // Ordena de mayor a menor
         });
 
         let remainingAmount = highestBet.amount;

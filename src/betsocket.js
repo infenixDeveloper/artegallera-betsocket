@@ -79,21 +79,21 @@ module.exports = (io) => {
     });
 
     socket.on("Statusbetting", async ({ id, amount, status }, callback) => {
-      try {
-        const bet = await betting.findByPk(id);
-        if (bet) {
-          await bet.update({ amount, status });
-          // io.emit("Statusbetting", { success: true, data: bet, message: "Apuesta actualizada con éxito" });
-          callback({ success: true, data: bet, message: "Apuesta actualizada con éxito" });
-        } else {
-          // io.emit("Statusbetting", { success: false, message: "Apuesta no encontrada" });
-          callback({ success: false, message: "Apuesta no encontrada" });
-        }
-      } catch (error) {
-        console.error("Error al actualizar la apuesta:", error);
-        // io.emit("Statusbetting", { success: false, message: "Error al actualizar la apuesta" });
-        callback({ success: false, message: "Error al actualizar la apuesta" });
-      }
+      // try {
+      //   const bet = await betting.findByPk(id);
+      //   if (bet) {
+      //     await bet.update({ amount, status });
+      //     // io.emit("Statusbetting", { success: true, data: bet, message: "Apuesta actualizada con éxito" });
+      //     callback({ success: true, data: bet, message: "Apuesta actualizada con éxito" });
+      //   } else {
+      //     // io.emit("Statusbetting", { success: false, message: "Apuesta no encontrada" });
+      //     callback({ success: false, message: "Apuesta no encontrada" });
+      //   }
+      // } catch (error) {
+      //   console.error("Error al actualizar la apuesta:", error);
+      //   // io.emit("Statusbetting", { success: false, message: "Error al actualizar la apuesta" });
+      //   callback({ success: false, message: "Error al actualizar la apuesta" });
+      // }
     })
 
     socket.on("createRound", async ({ id_event }, callback) => {
@@ -215,7 +215,6 @@ module.exports = (io) => {
 
           const round = await rounds.findAll({ where: { id, id_event } });
           callback({ success: true, data: { event, round } });
-
 
         }
       } catch (error) {
