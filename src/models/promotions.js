@@ -28,6 +28,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       type: DataTypes.BOOLEAN,
     },
+    is_movil_video: {
+      allowNull: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue:false
+    },
   }, {
     sequelize,
     modelName: 'promotions',

@@ -6,7 +6,7 @@ let connectedUsers = 0;
 module.exports = (io) => {
   setInterval(async () => {
     await VerificationBetting(io);
-  }, 20000);
+  }, 10000);
 
   io.on("connection", (socket) => {
     connectedUsers++;

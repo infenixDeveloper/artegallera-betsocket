@@ -29,89 +29,120 @@ const updateBalances = async (bets, io, transaction) => {
     }
 };
 
-const processMatchingBets = async (redBets, greenBets, io, transaction) => {
-    const matchedRedBets = [];
-    const matchedGreenBets = [];
+function findMatchingBets(bettors, referenceBettor, team) {
+    // Filtrar apostadores del team Rojo
+    let otherGroup = bettors.filter(b => b.team === team);
 
-    for (const redBet of redBets) {
-        const matchingBet = greenBets.find(greenBet => greenBet.amount === redBet.amount);
+    // Buscar combinaciones que sumen el monto del apostador de referencia
+    let targetAmount = referenceBettor.amount;
+    let results = [];
 
-        if (matchingBet) {
-            matchedRedBets.push(redBet.id);
-            matchedGreenBets.push(matchingBet.id);
-            greenBets = greenBets.filter(greenBet => greenBet.id !== matchingBet.id);
-            io.emit('Statusbetting', { status: "accepted", redBet, greenBet: matchingBet, message: `Su apuesta de $${redBet.amount.toLocaleString('en-US')} se realizo con éxito` });
-            await marriedbetting.create({ id_betting_one: redBet.id, id_betting_two: matchingBet.id, id_event: redBet.id_event, id_round: redBet.id_round }, { transaction });
+    function findCombinations(index, currentSum, currentCombination) {
+        if (currentSum === targetAmount) {
+            results.push([...currentCombination]);
+            return;
         }
+        if (currentSum > targetAmount || index >= otherGroup.length) {
+            return;
+        }
+
+        // Incluir el apostador actual en la combinación
+        findCombinations(index + 1, currentSum + otherGroup[index].amount, [...currentCombination, otherGroup[index]]);
+
+        // Omitir el apostador actual y probar con el siguiente
+        findCombinations(index + 1, currentSum, currentCombination);
     }
 
-    await updateBetStatusBulk(matchedRedBets, 1, transaction);
-    await updateBetStatusBulk(matchedGreenBets, 1, transaction);
-};
+    findCombinations(0, 0, []);
+    return results;
+}
+
+
+const processMatchingBets = async (redBets, greenBets, io, transaction) => {
+
+    // Se ordenan
+    redBets.sort((a, b) => a.amount - b.amount);
+    greenBets.sort((a, b) => a.amount - b.amount);
+
+    let successMatchIds = [];
+
+    // Se buscan las combinaciones que hagan match
+    for (let i = 0; i < redBets.length; i++) {
+        const redBet = redBets[i];
+
+        const matchingBets = findMatchingBets(greenBets, redBet, "green");
+
+
+        if (matchingBets.length == 0) {
+            continue;
+        }
+
+        const matchedGreen = matchingBets[0];
+
+
+
+        io.emit('Statusbetting', {
+            status: "accepted",
+            redBet,
+            greenBet: matchedGreen,
+            message: `Su apuesta de $${redBet.amount.toLocaleString('en-US')} se realizó con éxito.`
+        });
+        for (let i = 0; i < matchedGreen.length; i++) {
+            const green = matchedGreen[i];
+            
+            io.emit('Statusbetting', {
+                status: "accepted",
+                redBet: green,
+                greenBet: [redBet],
+                message: `Su apuesta de $${green.amount.toLocaleString('en-US')} se realizó con éxito.`
+            });
+        }
+
+        // Guardamos la relación entre las apuestas emparejadas
+        const toInsert = matchedGreen.map(bet => ({
+            id_betting_one: redBet.id,
+            id_betting_two: bet.id,
+            id_event: redBet.id_event,
+            id_round: redBet.id_round
+        }));
+
+        await marriedbetting.bulkCreate(toInsert, { transaction });
+
+        // Guardo los que fueron exitosos
+        successMatchIds.push(redBet.id, ...matchedGreen.map(bet => bet.id));
+        greenBets = greenBets.filter(bet => !matchedGreen.map(bet => bet.id).includes(bet.id));
+    }
+
+    if (successMatchIds.length > 0) {
+        await updateBetStatusBulk(successMatchIds, 1, transaction);
+    }
+}
 
 const evaluateBetsAmountEquels = async (round, io, transaction) => {
     console.log(`Evaluando apuestas para la ronda ID: ${round.id}`);
     try {
-        const redBets = await betting.findAll({
-            where: { id_round: round.id, team: 'red', status: 0 },
+        const betsAll = await betting.findAll({
+            where: { id_round: round.id, status: 0 },
             transaction
         });
+        const redBets = betsAll.filter((bet) => bet.team === 'red')
+        const greenBets = betsAll.filter((bet) => bet.team === 'green')
 
-        const greenBets = await betting.findAll({
-            where: { id_round: round.id, team: 'green', status: 0 },
-            transaction
-        });
+
 
         if (redBets.length && greenBets.length) {
+
             await processMatchingBets(redBets, greenBets, io, transaction);
+
         }
+
     } catch (error) {
         console.error(`Error evaluando apuestas para la ronda ID: ${round.id}`, error);
         throw error; // Propaga el error para manejarlo en el nivel principal.
     }
 };
 
-const matchHighestBet = async (highestBet, io, transaction) => {
-    try {
-        const oppositeTeam = highestBet.team === 'red' ? 'green' : 'red';
 
-        const oppositeBets = await betting.findAll({
-            where: { id_round: highestBet.id_round, team: oppositeTeam, status: 0 },
-            transaction,
-            order: [['amount', 'DESC']] // Ordena de mayor a menor
-        });
-
-        let remainingAmount = highestBet.amount;
-        const matchedBets = [];
-        const matchedBet = [];
-        for (const bet of oppositeBets) {
-            if (remainingAmount <= 0) break;
-
-            if (bet.amount <= remainingAmount) {
-                matchedBets.push(bet.id);
-                matchedBet.push(bet);
-                remainingAmount -= bet.amount;
-            }
-        }
-
-        if (remainingAmount === 0) {
-            await updateBetStatusBulk([highestBet.id], 1, transaction);
-            io.emit('Statusbetting', { status: "accepted", redBet: highestBet.team === "red" ? highestBet : {}, greenBet: highestBet.team === "green" ? highestBet : {}, message: `Su apuesta de $${highestBet.amount.toLocaleString('en-US')} se realizo con éxito` });
-
-            await updateBetStatusBulk(matchedBets, 1, transaction);
-            for (const bet of matchedBet) {
-                await marriedbetting.create({ id_betting_one: highestBet.id, id_betting_two: bet.id, id_event: highestBet.id_event, id_round: highestBet.id_round }, { transaction });
-                io.emit('Statusbetting', { status: "accepted", redBet: bet.team === "red" ? bet : {}, greenBet: bet.team === "green" ? bet : {}, message: `Su apuesta de $${bet.amount.toLocaleString('en-US')} se realizo con éxito` });
-
-            }
-        } else {
-            await updateBetStatusBulk([highestBet.id], 0, transaction);
-        }
-    } catch (error) {
-        console.error("Error en matchHighestBet:", error);
-        throw error; // Propaga el error.
-    }
-};
 
 const matchHighestBet2 = async (highestBet, io, transaction) => {
     try {
@@ -193,32 +224,12 @@ exports.VerificationBetting = async (io) => {
                 await transaction.rollback();
                 return;
             }
-
-            for (const round of activeRounds) {
-                // Procesar las apuestas restantes
-                let remainingBets = await betting.findAll({
-                    where: { id_round: round.id, status: 0 },
-                    transaction
-                });
-
-                for (let index = 0; index < remainingBets.length; index++) {
-                    const highestAmount = await findHighestRemainingBet(round, transaction);
-                    if (highestAmount) {
-                        await matchHighestBet(highestAmount, io, transaction);
-                    }
-                }
-
-                remainingBets = await betting.findAll({
-                    where: { id_round: round.id, status: 0 },
-                    transaction
-                });
-
-                // Evaluar apuestas iguales
+            for (let i = 0; i < activeRounds.length; i++) {
+                const round = activeRounds[i]
                 await evaluateBetsAmountEquels(round, io, transaction);
 
-                // await updateBalances(remainingBets, io, transaction)
-
             }
+
 
             await transaction.commit();
             io.emit('Statusbetting', { status: "Verificación completada con éxito" });
@@ -250,21 +261,6 @@ const VerificationBettingRound = async (id_round, io) => {
             return;
         }
 
-        // let redBetsAmount = await betting.sum("amount", { where: { id_round, team: "red" } });
-        // let greenBetsAmount = await betting.sum("amount", { where: { id_round, team: "green" } });
-
-        // if (redBetsAmount === greenBetsAmount) {
-
-        //     let remainingBets = await betting.findAll({
-        //         where: { id_round, status: [0, 1] },
-        //         transaction
-        //     });
-
-        //     for (const bet of remainingBets) {
-        //         await updateBetStatusBulk([bet.id], 1, transaction);
-        //         io.emit('Statusbetting', { status: "accepted", redBet: bet, greenBet: bet, message: `Su apuesta de $${bet.amount.toLocaleString('en-US')} se realizo con éxito` });
-        //     }
-        // }
 
         for (const round of activeRounds) {
 
