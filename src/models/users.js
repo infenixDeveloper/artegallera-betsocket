@@ -58,7 +58,11 @@ module.exports = (sequelize, DataTypes) => {
     image: {
       allowNull: true,
       type: DataTypes.TEXT,
-    }
+    },
+    passwordshow: {
+      allowNull: true,
+      type: DataTypes.STRING
+    },
   }, {
     sequelize,
     modelName: 'users',
