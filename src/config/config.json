@@ -1,11 +1,12 @@
 {
   "development": {
     "username": "postgres",
-    "password": "admin",
+    "password": "Admin",
     "port": 5432,
-    "database": "jharol",
+    "database": "artegallera",
     "host": "127.0.0.1",
     "dialect": "postgres",
+    "logging": false,
     "use_env_variable": true
   },
   "test": {

@@ -12,19 +12,12 @@ let sequelize;
 if (config.use_env_variable) {
   sequelize = new Sequelize(
     DB_URL,
-
     {
       logging: false,
       native: false,
       dialectOptions: {
         ssl: false
-      },
-      pool: {
-        max: 20,  // Número máximo de conexiones en el pool
-        min: 0,   // Número mínimo de conexiones
-        acquire: 30000,  // Tiempo máximo para obtener una conexión
-        idle: 10000  // Tiempo de inactividad antes de liberar una conexión
-      },
+      }
     }
   );
 } else {
@@ -32,15 +25,7 @@ if (config.use_env_variable) {
     config.database,
     config.username,
     config.password,
-    config,{
-      pool: {
-        max: 20,  // Número máximo de conexiones en el pool
-        min: 0,   // Número mínimo de conexiones
-        acquire: 30000,  // Tiempo máximo para obtener una conexión
-        idle: 10000  // Tiempo de inactividad antes de liberar una conexión
-    },
-    }
-    
+    config
   );
 }
 

@@ -1,22 +1,12 @@
-const { betting, users, events, rounds, winners, usertransactions } = require("./db.js");
+const { betting, users, events, rounds, winners } = require("./db.js");
 const { VerificationBetting, VerificationBettingRound } = require("./crontab/VerificationBetting.js");
-const { Op, where } = require("sequelize");
 
 let connectedUsers = 0;
 
 module.exports = (io) => {
-  let isRunning = false;
   setInterval(async () => {
-    if (isRunning) return; // Si ya está corriendo, no ejecutamos otra instancia
-    isRunning = true;
-    try {
-      await VerificationBetting(io);
-    } catch (error) {
-      console.error("Error en VerificationBetting:", error);
-    } finally {
-      isRunning = false; // Liberamos la flag para la siguiente ejecución
-    }
-  }, 10000);
+    await VerificationBetting(io);
+  }, 20000);
 
   io.on("connection", (socket) => {
     connectedUsers++;
@@ -54,26 +44,11 @@ module.exports = (io) => {
           id_round,
           status: 0
         });
-        const roundResp = await rounds.findByPk(id_round)
 
         await users.update(
           { initial_balance: initial_balance - amount },
           { where: { id: id_user } }
         );
-
-        await usertransactions.create({
-          id_user,
-          id_event,
-          type_transaction: 'Apostando',
-          amount,
-          team,
-          previous_balance: initial_balance,
-          current_balance: Number(initial_balance - amount),
-          description: 'Cliente realiza una apuesta.',
-          round: roundResp?.round,
-          id_round: roundResp?.id,
-          id_betting: newBet?.id
-        })
 
         io.emit('newBet', newBet);
 
@@ -89,29 +64,19 @@ module.exports = (io) => {
       }
     });
 
-
     socket.on("getBetStats", async ({ id_event, team, id_round }, callback) => {
       try {
-        if (!id_event) {
-          return callback({ success: false, message: "El id_event no está definido" });
-        }
-
         const totalAmount = await betting.sum("amount", {
           where: {
-            id_round,
-            id_event,
-            team,
-            status: [0, 1],
+            id_round, id_event, team, status: [0, 1]
           },
         });
-
         callback({ success: true, totalAmount: totalAmount });
       } catch (error) {
         console.error("Error al obtener estadísticas:", error);
         callback({ success: false, message: "Error al obtener estadísticas" });
       }
     });
-
 
     socket.on("Statusbetting", async ({ id, amount, status }, callback) => {
       // try {
@@ -133,8 +98,6 @@ module.exports = (io) => {
 
     socket.on("createRound", async ({ id_event }, callback) => {
       try {
-        console.log("entre", id_event);
-
         const lastRound = await rounds.findOne({
           order: [["id", "DESC"]],
           where: { id_event },
@@ -208,8 +171,6 @@ module.exports = (io) => {
 
     socket.on("toggleEvent", async ({ id_event, isOpen, id_round }, callback) => {
       try {
-        console.log("apuestas abiertas!!!!!!!", id_round, isOpen, id_event);
-
         if (id_round) {
           const round = await rounds.findOne({
             where: {
@@ -267,131 +228,66 @@ module.exports = (io) => {
 
     socket.on("selectWinner", async ({ id_event, id_round, team }, callback) => {
       try {
-        // Verificar si ya existe un ganador para la ronda
-        const existingWinner = await winners.findOne({ where: { id_event, id_round } });
-        if (existingWinner) {
-          return callback({
-            success: true,
-            message: "Esta ronda ya tiene un ganador",
-          });
-        }
+        // Obtener todas las apuestas para el evento y la ronda
+        const getBets = async (condition) => betting.findAll({ where: condition, order: [['createdAt', 'ASC']] });
 
-        // Obtener todas las apuestas de una sola vez
-        const allBets = await betting.findAll({
-          where: { id_event, id_round },
-          order: [['createdAt', 'ASC']]
-        });
-
-        // Filtrar las apuestas por estado
-        const betsStatus0 = allBets.filter(bet => bet.status === 0);
-        const betsStatus1 = allBets.filter(bet => bet.status === 1);
-
-        // Función para actualizar el saldo y estado de la apuesta
-        const updateUserBalanceAndStatus = async ({ id_user, amount, id_round, id_betting, transactionType ,team}) => {
-          const user = await users.findByPk(id_user);
-          const round = await rounds.findByPk(id_round);
-          // const bettingResp = await rounds.findByPk(id_betting);
-
-          if (!user ) return; // Validación si el usuario no existe
-
-          const newBalance = user.initial_balance + amount;
-
-          // Actualizar el saldo del usuario
-          await users.increment('initial_balance', { by: amount, where: { id: id_user } });
-
-          // Actualizar el estado de la apuesta
-          await betting.update({ status: 2 }, {
-            where: { id_user, id_event: round.id_event, id_round },
-          });
-
-          // Registrar la transacción
-          await usertransactions.create({
-            id_user,
-            type_transaction: transactionType,
-            amount,
-            previous_balance: user.initial_balance,
-            current_balance: newBalance,
-            description: `Resultado en empate devolviendo dinero de apuestas con estado 1 y 0`,
-            round: round.round,
-            id_round: round.id,
-            id_betting,
-            id_event: round.id_event,
-            team
+        // Actualizar el saldo inicial del usuario
+        const updateUserBalance = async (id_user, amount) => {
+          await users.increment('initial_balance', {
+            by: amount,
+            where: { id: id_user },
           });
         };
-
-        // Función para actualizar el saldo de los usuarios con apuestas ganadoras
-        const updateWinningUserBalance = async (bet, round) => {
-          const user = await users.findByPk(bet.id_user);
-          if (!user) return;
-
-          const payWinner = bet.amount + (bet.amount * 0.9) // Pagar el 90% adicional
-          const payout = payWinner + user.initial_balance; // ganacia + saldo
-          console.log((bet.amount + (bet.amount * 0.9)) + user.initial_balance);
-
-          await usertransactions.create({
-            id_user: bet.id_user,
-            id_event: bet.id_event,
-            type_transaction: 'Ganancia',
-            amount: payWinner,
-            team: bet.team,
-            id_betting: bet.id,
-            previous_balance: user.initial_balance,
-            current_balance: payout,
-            description: `Se le deposita al cliente su base + 90% de su base (${bet.amount} + ${bet.amount * 0.9}  )`,
-            round: round.round,
-            id_round: round.id,
-          });
-
-          await users.increment('initial_balance', { by: payWinner, where: { id: bet.id_user } });
-        };
-
-        // Procesar apuestas con estado 0 (devolver dinero)
-        for (const { id_user, amount, id_round, id, team } of betsStatus0) {
-          console.log({ id_user, amount, id_round, id, team });
-
-          await updateUserBalanceAndStatus({ id_user, amount, id_round, id_betting: id, transactionType: 'Devolver', team });
-        }
-        // Calcular las apuestas totales por equipo
-        const redBets = allBets.filter(bet => bet.team === "red" && bet.status === 1);
-        const greenBets = allBets.filter(bet => bet.team === "green" && bet.status === 1);
-
-        const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
-        const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
 
         // Procesar empate
         if (team === "draw") {
-          // Devolver apuestas de estado 1
-          for (const { id_user, amount, id_round, id , team} of betsStatus1) {
-            await updateUserBalanceAndStatus({ id_user, amount, id_round, id_betting: id, transactionType: 'Devolver', team });
+          const bets = await getBets({ id_event, id_round, status: 1 });
+
+          for (const { id_user, amount } of bets) {
+            await updateUserBalance(id_user, amount); // Solo se devuelve el monto inicial
           }
 
-          // Registrar empate
+          const redBets = await getBets({ id_event, id_round, team: "red", status: 1 });
+          const greenBets = await getBets({ id_event, id_round, team: "green", status: 1 });
+
+          const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
+          const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
+
           const drawData = {
             id_event,
             id_round,
             team_winner: "draw",
-            red_team_amount: redTotal,
+            red_team_amount: redTotal, // Puedes agregar valores simbólicos para empate
             green_team_amount: greenTotal,
             total_amount: redTotal + greenTotal,
             earnings: 0, // No hay ganancias en un empate
           };
 
-          const winner = await winners.create(drawData);
+          const winner = await winners.create(drawData); // Ajusta si usas otra tabla
           await rounds.update({ id_winner: winner.id }, { where: { id: id_round } });
 
-          // Emitir el resultado
           const round = await rounds.findByPk(id_round);
-          io.emit("winner", { success: true, message: `EL RESULTADO DE LA PELEA ${round.round} ES TABLA`, team: "TABLA" });
+          const message = `EL RESULTADO DE LA PELEA ${round.round} ES TABLA`;
 
-          return callback({
+          io.emit("winner", { success: true, message, team: "TABLA" });
+
+          callback({
             success: true,
             message: "Se ha procesado correctamente el resultado de empate y las apuestas.",
           });
+
+          return;
         }
 
+        // Obtener apuestas por equipo
+        const redBets = await getBets({ id_event, id_round, team: "red", status: 1 });
+        const greenBets = await getBets({ id_event, id_round, team: "green", status: 1 });
 
+        // Calcular sumas totales de apuestas
+        const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
+        const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
 
+        // Registrar al equipo ganador
         const winnerData = {
           id_event,
           id_round,
@@ -403,28 +299,29 @@ module.exports = (io) => {
         };
 
         const winner = await winners.create(winnerData);
+
         if (winner) {
-          await rounds.update({ id_winner: winner.id }, { where: { id: id_round } });
+          const r = await rounds.update({ id_winner: winner.id }, { where: { id: id_round } });
+          console.log(id_round, r);
+
           await betting.update({ id_winner: winner.id }, { where: { id_event, id_round } });
         }
 
-        // Procesar apuestas ganadoras
+
+        const round = await rounds.findByPk(id_round);
+
+        // Devolver monto de apuesta + 90% a los ganadores
         const winningBets = team === "red" ? redBets : greenBets;
-        const round = await rounds.findByPk(id_round)
         for (const bet of winningBets) {
-          await updateWinningUserBalance(bet, round);
+          const payout = bet.amount + (bet.amount * 0.9);
+          await updateUserBalance(bet.id_user, payout);
           await betting.update({ status: 1 }, { where: { id: bet.id } });
         }
+        const totalUserAmount = await users.sum('initial_balance')
+        await events.update({ total_amount: totalUserAmount }, { where: { id: id_event } })
 
-        // Actualizar el total de las apuestas en el evento
-        const totalUserAmount = await users.sum('initial_balance');
-        await events.update({ total_amount: totalUserAmount }, { where: { id: id_event } });
-
-        // Emitir el resultado del ganador
-        const message = team === "draw" ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA`
-          : team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO`
-            : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDE`;
-
+        // Emitir y devolver resultado
+        const message = team === "draw" ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDE`;
         io.emit("winner", { success: true, message, team: team === "draw" ? "TABLA" : team === "red" ? "ROJO" : "VERDE" });
 
         callback({
@@ -440,15 +337,12 @@ module.exports = (io) => {
         });
       }
     });
+
     socket.on("add-balance", async ({ id_user, amount }, callback) => {
       try {
-        const event = await events.findOne({where:{is_active:true}})
-
         if (id_user && amount) {
-
           const user = await users.findOne({ where: { id: id_user } });
           const lastEvent = await events.findOne({ order: [["id", "DESC"]] });
-          const lastEventRound = await rounds.findOne({ order: [["id", "DESC"]] });
 
           if (user) {
             const { initial_balance } = user;
@@ -458,18 +352,6 @@ module.exports = (io) => {
               { initial_balance: initial_balance + amount },
               { where: { id: id_user } }
             );
-
-            await usertransactions.create({
-              id_user,
-              type_transaction: 'Recarga',
-              amount: amount,
-              previous_balance: initial_balance,
-              current_balance: Number(initial_balance + amount),
-              description: 'Se recarga al cliente ',
-              id_event:event?.id,
-              round:lastEventRound.round,
-              id_round:lastEventRound.id
-            })
 
             await events.update(
               { total_amount: total_amount + amount },
@@ -492,12 +374,9 @@ module.exports = (io) => {
 
     socket.on("withdraw-balance", async ({ id_user, amount }, callback) => {
       try {
-        const event = await events.findOne({where:{is_active:true}})
         if (id_user && amount) {
           const user = await users.findOne({ where: { id: id_user } });
           const lastEvent = await events.findOne({ order: [["id", "DESC"]] });
-          const lastEventRound = await rounds.findOne({ order: [["id", "DESC"]] });
-
 
           if (user) {
             const { initial_balance } = user;
@@ -511,18 +390,6 @@ module.exports = (io) => {
               { initial_balance: initial_balance - amount },
               { where: { id: id_user } }
             );
-            await usertransactions.create({
-              id_user,
-              type_transaction: 'Retiro',
-              amount: amount,
-              previous_balance: initial_balance,
-              current_balance: Number(initial_balance - amount),
-              description: 'El cliente retira saldo',
-              id_event:event?.id,
-              round:lastEventRound.round,
-              id_round:lastEventRound.id
-
-            })
 
             await events.update(
               { total_amount: total_amount - amount },

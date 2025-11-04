@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes) => {
         targetKey: 'id'
       });
       models.rounds.belongsTo(models.winners, {
-        foreignKey: 'id_winner',
+        foreignKey: 'id_winners',
         targetKey: 'id'
       });
       models.rounds.belongsTo(models.betting, {
