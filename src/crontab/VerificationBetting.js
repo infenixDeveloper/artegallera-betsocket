@@ -172,10 +172,11 @@ const findHighestRemainingBet = async (round, transaction) => {
 };
 
 exports.VerificationBetting = async (io) => {
+    let transaction = null;
     try {
         const id_round = await rounds.findOne({ where: { is_betting_active: true } });
         if (id_round) {
-            const transaction = await sequelize.transaction();
+            transaction = await sequelize.transaction();
             const activeEvent = await events.findOne({ where: { is_active: true } });
 
             if (!activeEvent) {
@@ -225,7 +226,9 @@ exports.VerificationBetting = async (io) => {
         }
     } catch (error) {
         console.error("Error en la verificación de apuestas:", error);
-        await transaction.rollback();
+        if (transaction) {
+            await transaction.rollback();
+        }
     }
 };
 
