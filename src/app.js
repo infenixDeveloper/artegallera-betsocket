@@ -1,4 +1,5 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const express = require("express");
 const bodyParser = require("body-parser");
 const morgan = require("morgan");
@@ -12,7 +13,7 @@ var corsOptions = {
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
     allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-    credentials: true
+    credentials: false
 };
 
 

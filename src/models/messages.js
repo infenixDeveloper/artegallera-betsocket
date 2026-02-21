@@ -33,8 +33,21 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER
     },
     content: {
-      allowNull: false,
+      allowNull: true,
       type: DataTypes.TEXT
+    },
+    image_url: {
+      allowNull: true,
+      type: DataTypes.STRING
+    },
+    image_name: {
+      allowNull: true,
+      type: DataTypes.STRING
+    },
+    message_type: {
+      allowNull: false,
+      type: DataTypes.ENUM('text', 'image'),
+      defaultValue: 'text'
     },
     event_id: {
       allowNull: true,
@@ -66,6 +79,7 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'messages',
   });
+
 
   return messages;
 };

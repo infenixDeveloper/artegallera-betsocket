@@ -1,3 +1,6 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
 const http = require("./src/app.js");
 const { conn } = require("./src/db.js");
 

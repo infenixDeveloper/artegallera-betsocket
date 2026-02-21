@@ -1,7 +1,20 @@
+const { Op } = require("sequelize");
 const { betting, users, events, rounds, winners } = require("./db.js");
 const { VerificationBetting, VerificationBettingRound } = require("./crontab/VerificationBetting.js");
 
 let connectedUsers = 0;
+
+/**
+ * Condición para obtener apuestas a devolver en caso de TABLA (pendientes 0 y aceptadas 1).
+ * Exportada para tests.
+ */
+function getDrawRefundWhere(eventId, roundId) {
+  return {
+    id_event: eventId,
+    id_round: roundId,
+    status: { [Op.in]: [0, 1] },
+  };
+}
 
 module.exports = (io) => {
   setInterval(async () => {
@@ -228,6 +241,10 @@ module.exports = (io) => {
 
     socket.on("selectWinner", async ({ id_event, id_round, team }, callback) => {
       try {
+        // Normalizar IDs para evitar fallos por tipo (string vs number)
+        const eventId = id_event != null ? Number(id_event) : null;
+        const roundId = id_round != null ? Number(id_round) : null;
+
         // Obtener todas las apuestas para el evento y la ronda
         const getBets = async (condition) => betting.findAll({ where: condition, order: [['createdAt', 'ASC']] });
 
@@ -239,41 +256,67 @@ module.exports = (io) => {
           });
         };
 
-        // Procesar empate
+        // Procesar empate (TABLA): devolver apuestas pendientes (0) y aceptadas (1); nunca rechazadas (2)
         if (team === "draw") {
-          const bets = await getBets({ id_event, id_round, status: 1 });
-
-          for (const { id_user, amount } of bets) {
-            await updateUserBalance(id_user, amount); // Solo se devuelve el monto inicial
+          if (eventId == null || roundId == null || isNaN(eventId) || isNaN(roundId)) {
+            callback({ success: false, message: "id_event e id_round son obligatorios y deben ser válidos." });
+            return;
           }
 
-          const redBets = await getBets({ id_event, id_round, team: "red", status: 1 });
-          const greenBets = await getBets({ id_event, id_round, team: "green", status: 1 });
+          const bets = await getBets(getDrawRefundWhere(eventId, roundId));
 
-          const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
-          const greenTotal = greenBets.reduce((sum, bet) => sum + bet.amount, 0);
+          const refundErrors = [];
+          for (const bet of bets) {
+            const uid = bet.id_user != null ? Number(bet.id_user) : null;
+            const amt = bet.amount != null ? Number(bet.amount) : 0;
+            if (uid == null || isNaN(uid) || amt <= 0) {
+              refundErrors.push({ betId: bet.id, reason: "id_user o amount inválido" });
+              continue;
+            }
+            try {
+              await updateUserBalance(uid, amt);
+            } catch (err) {
+              console.error(`Error devolviendo apuesta ${bet.id} (usuario ${uid}, monto ${amt}):`, err);
+              refundErrors.push({ betId: bet.id, id_user: uid, error: err.message });
+            }
+          }
+
+          if (refundErrors.length > 0) {
+            console.warn("Devolución TABLA: algunas apuestas fallaron:", refundErrors.length, refundErrors);
+          }
+
+          const redBets = bets.filter((b) => b.team === "red");
+          const greenBets = bets.filter((b) => b.team === "green");
+          const redTotal = redBets.reduce((sum, bet) => sum + (Number(bet.amount) || 0), 0);
+          const greenTotal = greenBets.reduce((sum, bet) => sum + (Number(bet.amount) || 0), 0);
 
           const drawData = {
-            id_event,
-            id_round,
+            id_event: eventId,
+            id_round: roundId,
             team_winner: "draw",
-            red_team_amount: redTotal, // Puedes agregar valores simbólicos para empate
+            red_team_amount: redTotal,
             green_team_amount: greenTotal,
             total_amount: redTotal + greenTotal,
-            earnings: 0, // No hay ganancias en un empate
+            earnings: 0,
           };
 
-          const winner = await winners.create(drawData); // Ajusta si usas otra tabla
-          await rounds.update({ id_winner: winner.id }, { where: { id: id_round } });
+          const winner = await winners.create(drawData);
+          await rounds.update({ id_winner: winner.id }, { where: { id: roundId } });
+          await betting.update({ id_winner: winner.id }, { where: { id_event: eventId, id_round: roundId } });
 
-          const round = await rounds.findByPk(id_round);
-          const message = `EL RESULTADO DE LA PELEA ${round.round} ES TABLA`;
+          const totalUserAmount = await users.sum('initial_balance');
+          await events.update({ total_amount: totalUserAmount }, { where: { id: eventId } });
+
+          const round = await rounds.findByPk(roundId);
+          const message = round ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : "TABLA";
 
           io.emit("winner", { success: true, message, team: "TABLA" });
 
           callback({
             success: true,
-            message: "Se ha procesado correctamente el resultado de empate y las apuestas.",
+            message: refundErrors.length === 0
+              ? "Se ha procesado correctamente el resultado de empate y las apuestas."
+              : `Empate procesado. Devoluciones aplicadas con ${refundErrors.length} advertencia(s).`,
           });
 
           return;
@@ -431,3 +474,5 @@ module.exports = (io) => {
     });
   });
 };
+
+module.exports.getDrawRefundWhere = getDrawRefundWhere;
