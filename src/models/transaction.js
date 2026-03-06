@@ -52,10 +52,6 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: true,
             type: DataTypes.INTEGER
         },
-        id_round: {
-            allowNull: true,
-            type: DataTypes.INTEGER
-        },
         type_transaction: {
             allowNull: false,
             type: DataTypes.ENUM('Apostando', 'Devolver', 'Ganancia', 'Recarga', 'Retiro')
@@ -76,17 +72,6 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: true,
             type: DataTypes.STRING
         },
-
-        createdat: {
-            allowNull: false,
-            type: DataTypes.DATE,
-            defaultValue: sequelize.literal('CURRENT_TIMESTAMP')
-        },
-        updatedat: {
-            allowNull: false,
-            type: DataTypes.DATE,
-            defaultValue: sequelize.literal('CURRENT_TIMESTAMP')
-        },
         description: {
             allowNull: false,
             type: DataTypes.STRING
@@ -98,6 +83,10 @@ module.exports = (sequelize, DataTypes) => {
     }, {
         sequelize,
         modelName: 'usertransactions',
+        timestamps: true,
+        underscored: false,
+        createdAt: 'createdAt',
+        updatedAt: 'updatedAt'
     });
 
     return usertransactions;

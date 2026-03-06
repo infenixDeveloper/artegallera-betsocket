@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
-const { betting, users, events, rounds, winners } = require("./db.js");
-const { VerificationBetting, VerificationBettingRound } = require("./crontab/VerificationBetting.js");
+const { betting, users, events, rounds, winners, usertransactions } = require("./db.js");
+const { VerificationBetting, rejectPendingBetsForRound } = require("./crontab/VerificationBetting.js");
+const bettingLog = require("./utils/bettingLogger.js");
 
 let connectedUsers = 0;
 
@@ -19,14 +20,16 @@ function getDrawRefundWhere(eventId, roundId) {
 module.exports = (io) => {
   setInterval(async () => {
     await VerificationBetting(io);
-  }, 20000);
+  }, 10000);
 
   io.on("connection", (socket) => {
     connectedUsers++;
+    bettingLog.log(`[APUESTAS] Nueva conexión al socket de apuestas. Usuarios conectados: ${connectedUsers}`);
     console.log("New connection to bets socket. Connected users:", connectedUsers);
 
     socket.on("disconnect", () => {
       connectedUsers--;
+      bettingLog.log(`[APUESTAS] Usuario desconectado. Usuarios conectados: ${connectedUsers}`);
       console.log("User disconnected from bets socket. Connected users:", connectedUsers);
     });
 
@@ -35,18 +38,32 @@ module.exports = (io) => {
         const { id_user, id_event, amount, team, id_round } = data;
 
         if (!id_user || !id_event || !amount || !team || !id_round) {
-          return { success: false, message: 'Faltan datos para realizar la apuesta' };
+          if (typeof callback === "function") callback({ success: false, message: 'Faltan datos para realizar la apuesta' });
+          return;
+        }
+
+        const round = await rounds.findByPk(id_round);
+        if (!round) {
+          if (typeof callback === "function") callback({ success: false, message: 'Ronda no encontrada.' });
+          return;
+        }
+        if (round.is_betting_active === false) {
+          bettingLog.log(`[APUESTAS] APUESTA RECHAZADA BOTONERA CERRADA | id_user=${id_user} id_round=${id_round} amount=${amount} team=${team}`);
+          if (typeof callback === "function") callback({ success: false, message: 'La ronda está cerrada; no se aceptan más apuestas.' });
+          return;
         }
 
         const user = await users.findOne({ where: { id: id_user } });
 
         if (!user) {
-          return { success: false, message: 'Usuario no encontrado' };
+          if (typeof callback === "function") callback({ success: false, message: 'Usuario no encontrado' });
+          return;
         }
 
         const { initial_balance } = user;
         if (initial_balance < amount) {
-          return { success: false, message: 'Saldo insuficiente' };
+          if (typeof callback === "function") callback({ success: false, message: 'Saldo insuficiente' });
+          return;
         }
 
         const newBet = await betting.create({
@@ -63,31 +80,62 @@ module.exports = (io) => {
           { where: { id: id_user } }
         );
 
+        const roundRow = await rounds.findByPk(id_round);
+        await usertransactions.create({
+          id_user,
+          id_event,
+          id_round,
+          round: roundRow ? roundRow.round : null,
+          type_transaction: 'Apostando',
+          amount,
+          previous_balance: initial_balance,
+          current_balance: initial_balance - amount,
+          team,
+          description: 'Apuesta realizada',
+          id_betting: newBet.id
+        });
+
         io.emit('newBet', newBet);
+
+        bettingLog.log(`[APUESTAS] APUESTA RECIBIDA | id_betting=${newBet.id} id_user=${id_user} id_round=${id_round} team=${team} amount=${amount}`);
 
         const totalAmount = await betting.sum('amount', {
           where: { id_event, team, id_round, status: 1 }
         });
 
         io.emit("updatedTotalAmount", { team, totalAmount });
-        callback({ success: true, message: 'Apuesta realizada con éxito.' });
+        if (typeof callback === "function") callback({ success: true, message: 'Apuesta realizada con éxito.' });
 
       } catch (error) {
         console.error('Error al realizar la apuesta:', error);
+        bettingLog.error(`[APUESTAS] placeBet error: ${error.message}`);
+        if (typeof callback === "function") callback({ success: false, message: 'Error al realizar la apuesta.' });
       }
     });
 
-    socket.on("getBetStats", async ({ id_event, team, id_round }, callback) => {
+    socket.on("getBetStats", async ({ id_event, team, id_round, onlyAccepted }, callback) => {
       try {
+        if (id_event == null || id_round == null || team == null || team === "") {
+          if (typeof callback === "function") {
+            callback({ success: false, message: "Faltan id_event, id_round o team" });
+          }
+          return;
+        }
+        const statusFilter = onlyAccepted === true ? 1 : [0, 1];
         const totalAmount = await betting.sum("amount", {
           where: {
-            id_round, id_event, team, status: [0, 1]
+            id_round, id_event, team, status: statusFilter
           },
         });
-        callback({ success: true, totalAmount: totalAmount });
+        if (typeof callback === "function") {
+          callback({ success: true, totalAmount: totalAmount });
+        }
       } catch (error) {
+        bettingLog.error(`[APUESTAS] getBetStats error: ${error.message}`);
         console.error("Error al obtener estadísticas:", error);
-        callback({ success: false, message: "Error al obtener estadísticas" });
+        if (typeof callback === "function") {
+          callback({ success: false, message: "Error al obtener estadísticas" });
+        }
       }
     });
 
@@ -192,7 +240,31 @@ module.exports = (io) => {
           });
 
           if (round) {
+            if (isOpen === false) {
+              bettingLog.log(`[APUESTAS] toggleEvent - Cerrando botonera id_round=${round.id} id_event=${id_event}`);
+              await VerificationBetting(io);
+              const [totalRojo, totalVerde] = await Promise.all([
+                betting.sum('amount', { where: { id_round: round.id, team: 'red', status: 1 } }),
+                betting.sum('amount', { where: { id_round: round.id, team: 'green', status: 1 } })
+              ]);
+              const equiv = totalRojo != null && totalVerde != null && Math.abs((totalRojo || 0) - (totalVerde || 0)) < 0.01;
+              bettingLog.log(`[APUESTAS] BARRIDO CIERRE | id_round=${round.id} | aceptadas_rojo=$${(totalRojo || 0).toLocaleString('en-US')} aceptadas_verde=$${(totalVerde || 0).toLocaleString('en-US')} equivalente=${equiv ? 'Sí' : 'No'}`);
+              const { rejectedCount } = await rejectPendingBetsForRound(round.id, io);
+              bettingLog.log(`[APUESTAS] BARRIDO CIERRE FIN | id_round=${round.id} | rechazadas=${rejectedCount} devueltas=${rejectedCount}`);
+              if (rejectedCount > 0) {
+                io.emit("Statusbetting", {
+                  status: "Apuestas cerradas",
+                  message: `Se rechazaron ${rejectedCount} apuesta(s) pendiente(s) y se devolvió el monto.`
+                });
+              }
+            } else {
+              bettingLog.log(`[APUESTAS] BOTONERA ABIERTA | id_event=${id_event} id_round=${round.id} round=${round.round || '-'}`);
+            }
+
             await round.update({ is_betting_active: isOpen });
+            if (isOpen === false) {
+              bettingLog.log(`[APUESTAS] BOTONERA CERRADA | id_event=${id_event} id_round=${round.id}`);
+            }
             io.emit("isBettingActive", { success: true, data: round, message: isOpen ? "Ronda Activo" : "Ronda Inactivo" });
 
             const activeRounds = await rounds.findAll({ where: { id_event, is_betting_active: true } });
@@ -201,21 +273,31 @@ module.exports = (io) => {
               io.emit("getActiveRounds", { success: true, data: activeRounds, message: "Rondas activas encontradas con éxito" })
             }
 
-            if (isOpen === false) {
-              await VerificationBettingRound(round.id, io);
+            if (typeof callback === "function") {
+              callback({
+                success: true,
+                message: isOpen ? "Ronda activa para apuestas." : "Ronda cerrada. Apuestas pendientes rechazadas y monto devuelto."
+              });
             }
-
+          } else {
+            if (typeof callback === "function") {
+              callback({ success: false, message: "Ronda no encontrada." });
+            }
           }
         } else {
-          callback({ success: false, message: "Evento no encontrado" });
+          if (typeof callback === "function") {
+            callback({ success: false, message: "Evento no encontrado" });
+          }
         }
       } catch (error) {
+        bettingLog.error(`[APUESTAS] toggleEvent error: ${error.message}`);
         console.error("Error al procesar el evento:", error);
-
-        callback({
-          success: false,
-          message: "Error al procesar el evento. Por favor, intente nuevamente.",
-        });
+        if (typeof callback === "function") {
+          callback({
+            success: false,
+            message: "Error al procesar el evento. Por favor, intente nuevamente.",
+          });
+        }
       }
     })
 
@@ -256,6 +338,8 @@ module.exports = (io) => {
           });
         };
 
+        bettingLog.log(`[APUESTAS] selectWinner - id_event=${eventId} id_round=${roundId} team=${team}`);
+
         // Procesar empate (TABLA): devolver apuestas pendientes (0) y aceptadas (1); nunca rechazadas (2)
         if (team === "draw") {
           if (eventId == null || roundId == null || isNaN(eventId) || isNaN(roundId)) {
@@ -264,6 +348,7 @@ module.exports = (io) => {
           }
 
           const bets = await getBets(getDrawRefundWhere(eventId, roundId));
+          const roundRow = await rounds.findByPk(roundId);
 
           const refundErrors = [];
           for (const bet of bets) {
@@ -271,17 +356,36 @@ module.exports = (io) => {
             const amt = bet.amount != null ? Number(bet.amount) : 0;
             if (uid == null || isNaN(uid) || amt <= 0) {
               refundErrors.push({ betId: bet.id, reason: "id_user o amount inválido" });
+              bettingLog.log(`[APUESTAS] TABLA ERROR PAGO | id_betting=${bet.id} id_user=${uid} amount=${amt} | motivo=id_user o amount inválido`);
               continue;
             }
             try {
+              const userBefore = await users.findByPk(uid);
+              const previousBalance = userBefore ? userBefore.initial_balance : 0;
               await updateUserBalance(uid, amt);
+              await usertransactions.create({
+                id_user: uid,
+                id_event: eventId,
+                id_round: roundId,
+                round: roundRow ? roundRow.round : null,
+                type_transaction: 'Devolver',
+                amount: amt,
+                previous_balance: previousBalance,
+                current_balance: previousBalance + amt,
+                team: bet.team,
+                description: 'Devolución por resultado TABLA',
+                id_betting: bet.id
+              });
+              bettingLog.log(`[APUESTAS] TABLA DEVOLUCIÓN | id_betting=${bet.id} id_user=${uid} amount=${amt}`);
             } catch (err) {
               console.error(`Error devolviendo apuesta ${bet.id} (usuario ${uid}, monto ${amt}):`, err);
               refundErrors.push({ betId: bet.id, id_user: uid, error: err.message });
+              bettingLog.log(`[APUESTAS] TABLA ERROR PAGO | id_betting=${bet.id} id_user=${uid} amount=${amt} | motivo=${err.message}`);
             }
           }
 
           if (refundErrors.length > 0) {
+            bettingLog.warn(`[APUESTAS] Devolución TABLA: ${refundErrors.length} apuestas fallaron: ${JSON.stringify(refundErrors)}`);
             console.warn("Devolución TABLA: algunas apuestas fallaron:", refundErrors.length, refundErrors);
           }
 
@@ -310,6 +414,7 @@ module.exports = (io) => {
           const round = await rounds.findByPk(roundId);
           const message = round ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : "TABLA";
 
+          bettingLog.log(`[APUESTAS] SELECTWINNER TABLA | id_round=${roundId} | devueltas=${bets.length - refundErrors.length} errores=${refundErrors.length}`);
           io.emit("winner", { success: true, message, team: "TABLA" });
 
           callback({
@@ -322,9 +427,9 @@ module.exports = (io) => {
           return;
         }
 
-        // Obtener apuestas por equipo
-        const redBets = await getBets({ id_event, id_round, team: "red", status: 1 });
-        const greenBets = await getBets({ id_event, id_round, team: "green", status: 1 });
+        // Obtener apuestas por equipo (usar eventId/roundId normalizados)
+        const redBets = await getBets({ id_event: eventId, id_round: roundId, team: "red", status: 1 });
+        const greenBets = await getBets({ id_event: eventId, id_round: roundId, team: "green", status: 1 });
 
         // Calcular sumas totales de apuestas
         const redTotal = redBets.reduce((sum, bet) => sum + bet.amount, 0);
@@ -332,8 +437,8 @@ module.exports = (io) => {
 
         // Registrar al equipo ganador
         const winnerData = {
-          id_event,
-          id_round,
+          id_event: eventId,
+          id_round: roundId,
           team_winner: team,
           red_team_amount: redTotal,
           green_team_amount: greenTotal,
@@ -344,27 +449,49 @@ module.exports = (io) => {
         const winner = await winners.create(winnerData);
 
         if (winner) {
-          const r = await rounds.update({ id_winner: winner.id }, { where: { id: id_round } });
-          console.log(id_round, r);
-
-          await betting.update({ id_winner: winner.id }, { where: { id_event, id_round } });
+          await rounds.update({ id_winner: winner.id }, { where: { id: roundId } });
+          await betting.update({ id_winner: winner.id }, { where: { id_event: eventId, id_round: roundId } });
         }
 
-
-        const round = await rounds.findByPk(id_round);
+        const round = await rounds.findByPk(roundId);
 
         // Devolver monto de apuesta + 90% a los ganadores
         const winningBets = team === "red" ? redBets : greenBets;
+        const noPagados = [];
+        let totalPagado = 0;
         for (const bet of winningBets) {
           const payout = bet.amount + (bet.amount * 0.9);
-          await updateUserBalance(bet.id_user, payout);
-          await betting.update({ status: 1 }, { where: { id: bet.id } });
+          try {
+            const userBefore = await users.findByPk(bet.id_user);
+            const previousBalance = userBefore ? userBefore.initial_balance : 0;
+            await updateUserBalance(bet.id_user, payout);
+            await usertransactions.create({
+              id_user: bet.id_user,
+              id_event: eventId,
+              id_round: roundId,
+              round: round ? round.round : null,
+              type_transaction: 'Ganancia',
+              amount: payout,
+              previous_balance: previousBalance,
+              current_balance: previousBalance + payout,
+              team: bet.team,
+              description: 'Ganancia por apuesta ganadora',
+              id_betting: bet.id
+            });
+            await betting.update({ status: 1 }, { where: { id: bet.id } });
+            totalPagado += payout;
+            bettingLog.log(`[APUESTAS] GANANCIA PAGADA | id_betting=${bet.id} id_user=${bet.id_user} team=${bet.team} amount_apuesta=${bet.amount} payout=${payout}`);
+          } catch (err) {
+            console.error(`Error pagando ganancia apuesta ${bet.id} (usuario ${bet.id_user}):`, err);
+            noPagados.push({ id_betting: bet.id, id_user: bet.id_user, amount: bet.amount, motivo: err.message });
+            bettingLog.log(`[APUESTAS] GANANCIA NO PAGADA | id_betting=${bet.id} id_user=${bet.id_user} team=${bet.team} amount=${bet.amount} | motivo=${err.message}`);
+          }
         }
-        const totalUserAmount = await users.sum('initial_balance')
-        await events.update({ total_amount: totalUserAmount }, { where: { id: id_event } })
+        const totalUserAmount = await users.sum('initial_balance');
+        await events.update({ total_amount: totalUserAmount }, { where: { id: eventId } });
 
-        // Emitir y devolver resultado
-        const message = team === "draw" ? `EL RESULTADO DE LA PELEA ${round.round} ES TABLA` : team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDE`;
+        const message = team === "red" ? `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR ROJO` : `EL GANADOR DE LA PELEA ${round.round} ES EL COLOR VERDE`;
+        bettingLog.log(`[APUESTAS] SELECTWINNER | id_round=${roundId} ganador=${team} | total_ganadores=${winningBets.length} total_pagado=$${totalPagado.toLocaleString('en-US')} no_pagados=${noPagados.length}${noPagados.length ? ' ' + JSON.stringify(noPagados) : ''}`);
         io.emit("winner", { success: true, message, team: team === "draw" ? "TABLA" : team === "red" ? "ROJO" : "VERDE" });
 
         callback({
@@ -373,6 +500,7 @@ module.exports = (io) => {
         });
 
       } catch (error) {
+        bettingLog.error(`[APUESTAS] selectWinner error: ${error.message}`);
         console.error(error);
         callback({
           success: false,
@@ -390,9 +518,10 @@ module.exports = (io) => {
           if (user) {
             const { initial_balance } = user;
             const { total_amount } = lastEvent;
+            const newBalance = initial_balance + amount;
 
             await users.update(
-              { initial_balance: initial_balance + amount },
+              { initial_balance: newBalance },
               { where: { id: id_user } }
             );
 
@@ -400,6 +529,16 @@ module.exports = (io) => {
               { total_amount: total_amount + amount },
               { where: { id: lastEvent.id } }
             );
+
+            await usertransactions.create({
+              id_user,
+              id_event: lastEvent.id,
+              type_transaction: 'Recarga',
+              amount,
+              previous_balance: initial_balance,
+              current_balance: newBalance,
+              description: 'Recarga de saldo'
+            });
 
             callback({ success: true, message: "Saldo actualizado correctamente." });
             io.emit("new-balance", { success: true, message: "Saldo actualizado correctamente." });
@@ -429,8 +568,10 @@ module.exports = (io) => {
               return callback({ success: false, message: "Saldo insuficiente." });
             }
 
+            const newBalance = initial_balance - amount;
+
             await users.update(
-              { initial_balance: initial_balance - amount },
+              { initial_balance: newBalance },
               { where: { id: id_user } }
             );
 
@@ -438,6 +579,16 @@ module.exports = (io) => {
               { total_amount: total_amount - amount },
               { where: { id: lastEvent.id } }
             );
+
+            await usertransactions.create({
+              id_user,
+              id_event: lastEvent.id,
+              type_transaction: 'Retiro',
+              amount,
+              previous_balance: initial_balance,
+              current_balance: newBalance,
+              description: 'Retiro de saldo'
+            });
 
             callback({ success: true, message: "Saldo actualizado correctamente." });
             io.emit("new-balance", { success: true, message: "Saldo actualizado correctamente." });

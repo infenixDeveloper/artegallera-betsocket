@@ -1,4 +1,5 @@
 const { betting, events, rounds, users, marriedbetting, sequelize } = require('../db');
+const bettingLog = require('../utils/bettingLogger.js');
 
 /**
  * CONSTANTES DE ESTADO DE APUESTAS
@@ -80,6 +81,8 @@ class BalanceManager {
 
                 // Actualizar estado de la apuesta a rechazada
                 await BettingStatusUpdater.updateBulk([bet.id], BET_STATUS.REJECTED, transaction);
+
+                bettingLog.log(`[APUESTAS] RECHAZO AL CIERRE | id_betting=${bet.id} id_user=${bet.id_user} team=${bet.team} amount=${bet.amount} | motivo=Sin emparejar`);
 
                 // Notificar al usuario (corregido: usar bet.amount en lugar de amountTotal)
                 io.emit('Statusbetting', {
@@ -365,6 +368,7 @@ class BettingMatcher {
      * @returns {Promise<{totalMatchedAmount: number, rejectedBets: Array<Object>}>}
      */
     static async processRound(round, io, transaction) {
+        bettingLog.log(`[APUESTAS] VerificationBetting - Procesando emparejamiento ronda ID: ${round.id}`);
         console.log(`\n🔄 Procesando emparejamiento para la ronda ID: ${round.id}`);
 
         // Obtener todas las apuestas pendientes de la ronda
@@ -375,6 +379,7 @@ class BettingMatcher {
         });
 
         if (allPendingBets.length === 0) {
+            bettingLog.log(`[APUESTAS] VerificationBetting - Ronda ${round.id}: no hay apuestas pendientes`);
             console.log('  ✓ No hay apuestas pendientes');
             return { totalMatchedAmount: 0, rejectedBets: [] };
         }
@@ -383,6 +388,7 @@ class BettingMatcher {
         const redBets = allPendingBets.filter(bet => bet.team === 'red');
         const greenBets = allPendingBets.filter(bet => bet.team === 'green');
 
+        bettingLog.log(`[APUESTAS] VerificationBetting - Ronda ${round.id}: ${redBets.length} rojas, ${greenBets.length} verdes pendientes`);
         console.log(`  📊 Apuestas pendientes: ${redBets.length} rojas, ${greenBets.length} verdes`);
 
         let totalMatchedAmount = 0;
@@ -400,6 +406,7 @@ class BettingMatcher {
         totalMatchedAmount += exactMatchResult.matchedAmount;
         currentRedBets = exactMatchResult.remainingRedBets;
         currentGreenBets = exactMatchResult.remainingGreenBets;
+        bettingLog.log(`[APUESTAS] VerificationBetting - Ronda ${round.id}: coincidencias exactas ${exactMatchResult.matchedCount} pares, $${exactMatchResult.matchedAmount.toLocaleString('en-US')}`);
         console.log(`  ✓ Coincidencias exactas: ${exactMatchResult.matchedCount} pares, $${exactMatchResult.matchedAmount.toLocaleString('en-US')}`);
 
         // PRIORIDAD 2: Emparejar apuestas grandes con múltiples pequeñas
@@ -457,6 +464,7 @@ class BettingMatcher {
         }
 
         totalMatchedAmount += largeBetMatchedAmount;
+        bettingLog.log(`[APUESTAS] VerificationBetting - Ronda ${round.id}: apuestas grandes emparejadas $${largeBetMatchedAmount.toLocaleString('en-US')}`);
         console.log(`  ✓ Apuestas grandes emparejadas: $${largeBetMatchedAmount.toLocaleString('en-US')}`);
 
         // Actualizar listas de apuestas disponibles
@@ -585,6 +593,7 @@ class BettingMatcher {
             transaction
         });
 
+        bettingLog.log(`[APUESTAS] VerificationBetting - Ronda ${round.id}: total emparejado $${totalMatchedAmount.toLocaleString('en-US')}, sin emparejar: ${remainingBets.length}`);
         console.log(`  📊 Total emparejado: $${totalMatchedAmount.toLocaleString('en-US')}`);
         console.log(`  ⚠️  Apuestas sin emparejar: ${remainingBets.length}`);
 
@@ -605,41 +614,39 @@ exports.VerificationBetting = async (io) => {
     let transaction = null;
     try {
         const activeRound = await rounds.findOne({ where: { is_betting_active: true } });
-        
+
         if (!activeRound) {
+            bettingLog.log(`[APUESTAS] CRON 10s - No hay ronda activa (is_betting_active: true)`);
             console.log("⚠️  No hay ronda activa para apuestas");
             return;
         }
 
         transaction = await sequelize.transaction();
-        const activeEvent = await events.findOne({ where: { is_active: true } });
-
-        if (!activeEvent) {
-            io.emit('Statusbetting', { status: "No hay eventos activos" });
-            console.log("⚠️  No hay eventos activos");
-            await transaction.rollback();
-            return;
-        }
-
-        const roundToProcess = await rounds.findOne({
-            where: { id_event: activeEvent.id, id: activeRound.id },
-            transaction
-        });
+        // Usar la ronda con apuestas abiertas directamente (sin exigir que el evento esté is_active)
+        const roundToProcess = await rounds.findByPk(activeRound.id, { transaction });
 
         if (!roundToProcess) {
-            io.emit('Statusbetting', { status: "No hay rondas activas" });
-            console.log("⚠️  No hay rondas activas");
+            bettingLog.warn(`[APUESTAS] VerificationBetting - Ronda ${activeRound.id} no encontrada`);
             await transaction.rollback();
             return;
         }
+
+        const [pendientesRojo, pendientesVerde] = await Promise.all([
+            betting.count({ where: { id_round: roundToProcess.id, status: BET_STATUS.PENDING, team: 'red' }, transaction }),
+            betting.count({ where: { id_round: roundToProcess.id, status: BET_STATUS.PENDING, team: 'green' }, transaction })
+        ]);
+        bettingLog.log(`[APUESTAS] CRON EMPAREJAMIENTO | id_round=${roundToProcess.id} | pendientes rojo=${pendientesRojo} verde=${pendientesVerde}`);
 
         // Procesar emparejamiento
         const result = await BettingMatcher.processRound(roundToProcess, io, transaction);
+
+        const acceptedCount = await betting.count({ where: { id_round: roundToProcess.id, status: BET_STATUS.ACCEPTED }, transaction });
 
         // Las apuestas no emparejadas se mantienen pendientes (no se rechazan automáticamente)
         // Esto permite que puedan ser emparejadas en futuras ejecuciones
 
         await transaction.commit();
+        bettingLog.log(`[APUESTAS] CRON EMPAREJAMIENTO FIN | id_round=${roundToProcess.id} | aceptadas=${acceptedCount} pendientes_sin_emparejar=${result.rejectedBets.length} total_emparejado=$${result.totalMatchedAmount.toLocaleString('en-US')}`);
         io.emit('Statusbetting', {
             status: "Verificación completada con éxito",
             matchedAmount: result.totalMatchedAmount,
@@ -648,7 +655,59 @@ exports.VerificationBetting = async (io) => {
         console.log(`✅ Verificación completada: $${result.totalMatchedAmount.toLocaleString('en-US')} emparejado`);
 
     } catch (error) {
+        bettingLog.error(`[APUESTAS] VerificationBetting error: ${error.message}`);
         console.error("✗ Error en la verificación de apuestas:", error);
+        if (transaction) {
+            await transaction.rollback();
+        }
+        throw error;
+    }
+};
+
+/**
+ * FUNCIÓN: rejectPendingBetsForRound
+ * Barrido al cerrar la ronda: rechaza todas las apuestas en estado pendiente (0) y devuelve el monto.
+ * No depende del evento activo; se ejecuta siempre que se cierra la botonera de la ronda.
+ * @param {number} id_round - ID de la ronda
+ * @param {Object} io - Socket.io instance
+ * @returns {Promise<{ rejectedCount: number }>}
+ */
+const rejectPendingBetsForRound = async (id_round, io) => {
+    let transaction = null;
+    try {
+        transaction = await sequelize.transaction();
+
+        const round = await rounds.findOne({
+            where: { id: id_round },
+            transaction
+        });
+
+        if (!round) {
+            bettingLog.warn(`[APUESTAS] rejectPendingBetsForRound - Ronda ${id_round} no encontrada`);
+            console.log(`⚠️  Ronda ${id_round} no encontrada`);
+            await transaction.rollback();
+            return { rejectedCount: 0 };
+        }
+
+        const pendingBets = await betting.findAll({
+            where: {
+                id_round: id_round,
+                status: BET_STATUS.PENDING
+            },
+            transaction
+        });
+
+        if (pendingBets.length > 0) {
+            bettingLog.log(`[APUESTAS] rejectPendingBetsForRound - Rechazando ${pendingBets.length} apuestas pendientes en ronda ${id_round}`);
+            console.log(`  🚫 Rechazando ${pendingBets.length} apuestas pendientes al cerrar ronda ${id_round}`);
+            await BalanceManager.restoreRejectedBets(pendingBets, io, transaction);
+        }
+
+        await transaction.commit();
+        return { rejectedCount: pendingBets.length };
+    } catch (error) {
+        bettingLog.error(`[APUESTAS] rejectPendingBetsForRound error: ${error.message}`);
+        console.error('✗ Error en barrido de apuestas pendientes:', error);
         if (transaction) {
             await transaction.rollback();
         }
@@ -715,6 +774,7 @@ const VerificationBettingRound = async (id_round, io) => {
 };
 
 exports.VerificationBettingRound = VerificationBettingRound;
+exports.rejectPendingBetsForRound = rejectPendingBetsForRound;
 
 // Exportar clases para testing
 exports.BettingMatcher = BettingMatcher;
