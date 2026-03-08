@@ -1,14 +1,22 @@
 #!/usr/bin/env node
 /**
- * Script temporal (solo terminal): devuelve montos de apuestas con status 0 (pendiente)
- * para un evento dado. Opción --dry-run solo imprime lo que se haría.
+ * Script temporal (solo terminal): devuelve montos de apuestas con status 0 (pendiente).
+ * Opción --dry-run solo imprime lo que se haría.
  *
- * Uso:
- *   node scripts/refund-pending-bets.js <id_event> [--dry-run]
+ * Uso (por evento; opcionalmente por ronda y/o usuario):
+ *   node scripts/refund-pending-bets.js <id_event> [--round <id_round>] [--user <id_user>] [--dry-run]
  *
- * Ejemplo:
- *   node scripts/refund-pending-bets.js 5
- *   node scripts/refund-pending-bets.js 5 --dry-run
+ * Ejemplos:
+ *   Por evento (todas las pendientes del evento):
+ *     node scripts/refund-pending-bets.js 5
+ *     node scripts/refund-pending-bets.js 5 --dry-run
+ *   Por evento y ronda:
+ *     node scripts/refund-pending-bets.js 5 --round 12
+ *     node scripts/refund-pending-bets.js 5 --round 12 --dry-run
+ *   Por evento y usuario:
+ *     node scripts/refund-pending-bets.js 5 --user 147
+ *   Por evento, ronda y usuario:
+ *     node scripts/refund-pending-bets.js 5 --round 12 --user 147 --dry-run
  */
 
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
@@ -23,22 +31,48 @@ const BET_STATUS_REJECTED = 2;
 function parseArgs() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
-  const idEvent = args.find((a) => !a.startsWith("--") && a !== "--dry-run");
+  const idEventArg = args[0];
 
-  if (!idEvent || isNaN(Number(idEvent))) {
-    console.error("Uso: node scripts/refund-pending-bets.js <id_event> [--dry-run]");
-    console.error("Ejemplo: node scripts/refund-pending-bets.js 5 --dry-run");
+  if (!idEventArg || isNaN(Number(idEventArg))) {
+    console.error("Uso: node scripts/refund-pending-bets.js <id_event> [--round <id_round>] [--user <id_user>] [--dry-run]");
+    console.error("Ejemplos:");
+    console.error("  node scripts/refund-pending-bets.js 5 --dry-run");
+    console.error("  node scripts/refund-pending-bets.js 5 --round 12 --user 147");
     process.exit(1);
   }
 
-  return { id_event: Number(idEvent), dryRun };
+  let id_round = null;
+  let id_user = null;
+  const roundIdx = args.indexOf("--round");
+  if (roundIdx !== -1 && args[roundIdx + 1] != null && !args[roundIdx + 1].startsWith("--")) {
+    const val = Number(args[roundIdx + 1]);
+    if (!isNaN(val)) id_round = val;
+  }
+  const userIdx = args.indexOf("--user");
+  if (userIdx !== -1 && args[userIdx + 1] != null && !args[userIdx + 1].startsWith("--")) {
+    const val = Number(args[userIdx + 1]);
+    if (!isNaN(val)) id_user = val;
+  }
+
+  return {
+    id_event: Number(idEventArg),
+    id_round,
+    id_user,
+    dryRun,
+  };
 }
 
 async function run() {
-  const { id_event, dryRun } = parseArgs();
+  const { id_event, id_round, id_user, dryRun } = parseArgs();
+
+  const where = { id_event, status: BET_STATUS_PENDING };
+  if (id_round != null) where.id_round = id_round;
+  if (id_user != null) where.id_user = id_user;
 
   console.log("\n--- Devolución de apuestas pendientes (status 0) ---");
   console.log("Evento ID:", id_event);
+  if (id_round != null) console.log("Ronda ID:", id_round);
+  if (id_user != null) console.log("Usuario ID:", id_user);
   console.log("Modo:", dryRun ? "DRY-RUN (no se modificará la BD)" : "EJECUCIÓN REAL");
   console.log("");
 
@@ -46,12 +80,12 @@ async function run() {
 
   try {
     const pendingBets = await betting.findAll({
-      where: { id_event, status: BET_STATUS_PENDING },
+      where,
       order: [["id", "ASC"]],
     });
 
     if (pendingBets.length === 0) {
-      console.log("No hay apuestas con status 0 para este evento.");
+      console.log("No hay apuestas con status 0 para los filtros indicados (evento" + (id_round != null ? ", ronda" : "") + (id_user != null ? ", usuario" : "") + ").");
       return;
     }
 
