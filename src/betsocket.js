@@ -498,8 +498,39 @@ module.exports = (io) => {
     });
 
     // Evento para obtener el valor del contador de usuarios conectados
-    socket.on('getConnectedUsers', (callback) => {
-      callback({ connectedUsers });
+    socket.on('getConnectedUsers', async (data, callback) => {
+      let cb = callback;
+      let payload = data;
+      if (typeof data === "function") {
+        cb = data;
+        payload = {};
+      }
+
+      if (typeof cb !== "function") return;
+
+      let base_viewers = 0;
+      try {
+        const id_event = payload?.id_event;
+        let eventRow = null;
+
+        if (id_event) {
+          socket.data = socket.data || {};
+          socket.data.id_event = id_event;
+          eventRow = await events.findOne({ where: { id: id_event } });
+        } else {
+          eventRow = await events.findOne({ where: { is_active: true } });
+          if (!eventRow) {
+            eventRow = await events.findOne({ order: [["id", "DESC"]] });
+          }
+        }
+
+        base_viewers = eventRow?.base_viewers ?? 0;
+      } catch (error) {
+        console.error("Error al obtener base_viewers:", error);
+      }
+
+      const totalConnected = (base_viewers ?? 0) + connectedUsers;
+      cb({ connectedUsers: totalConnected });
     });
 
     socket.on("user-amount", async ({ id_user, id_round }, callback) => {

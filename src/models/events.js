@@ -59,6 +59,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       type: DataTypes.DOUBLE,
       defaultValue: 0
+    },
+    base_viewers: {
+      allowNull: true,
+      type: DataTypes.INTEGER,
+      defaultValue: 0
     }
   }, {
     sequelize,
